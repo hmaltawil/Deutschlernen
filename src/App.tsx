@@ -15,7 +15,7 @@ const NAV = [
   { to: '/', label: 'Home', icon: IconHome, match: (p: string) => p === '/' },
   { to: '/levels', label: 'Levels', icon: IconLayers, match: (p: string) => p.startsWith('/levels') },
   { to: '/stats', label: 'Stats', icon: IconChart, match: (p: string) => p === '/stats' },
-  { to: '/settings', label: 'Settings', icon: IconGear, match: (p: string) => p === '/settings' || p === '/credits' },
+  { to: '/settings', label: 'Settings', icon: IconGear, match: (p: string) => p === '/settings' || p === '/credits' || p === '/sync' },
 ];
 
 export function App() {
@@ -35,6 +35,7 @@ export function App() {
   else if (path.startsWith('/levels/')) page = <LevelDetail n={Number(path.split('/')[2])} />;
   else if (path === '/stats') page = <Stats />;
   else if (path === '/settings') page = <SettingsPage />;
+  else if (path === '/sync') page = <SettingsPage key={params.get('code') ?? ''} joinCode={params.get('code') ?? undefined} />;
   else if (path === '/credits') page = <Credits />;
   else page = <Home />;
 

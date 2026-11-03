@@ -54,6 +54,7 @@ export function initOffline() {
   });
   deckIsCached().then((ok) => ok && set({ app: 'ready' }));
   refreshCounts();
+  pruneOldVoiceRuntime();
 }
 
 /** All recording URLs in the deck. */
@@ -118,4 +119,16 @@ export function stopSavingRecordings() {
 export async function removeSavedRecordings(): Promise<void> {
   await caches.delete(RECORDINGS_CACHE);
   await refreshCounts();
+}
+
+/** Drop cached voice runtime files from older versions (~30 MB each). */
+async function pruneOldVoiceRuntime() {
+  try {
+    const cache = await caches.open('tts-runtime');
+    for (const req of await cache.keys()) {
+      if (!new URL(req.url).pathname.includes(`/tts/${__TTS_VERSION__}/`)) await cache.delete(req);
+    }
+  } catch {
+    /* ignore */
+  }
 }

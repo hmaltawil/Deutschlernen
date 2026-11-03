@@ -5,6 +5,8 @@ import { dayKey, emptyDay, type DayStat } from './lib/scoring';
 import { MAX_STAGE, newProgress, review, type Progress } from './lib/srs';
 import { DEFAULT_SETTINGS, type Settings } from './lib/settings';
 import { piper } from './lib/audio';
+import { newer, progressChunk, sumDays } from './lib/sync/core';
+import { initSync, markDirty, onSyncApplied } from './lib/sync/engine';
 
 export interface AnswerInput {
   item: Item;
@@ -44,13 +46,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [progress, setProgress] = useState<Map<number, Progress>>(new Map());
-  const [days, setDays] = useState<Map<string, DayStat>>(new Map());
+  /** this device's daily stats; `days` below adds the other synced devices */
+  const [ownDays, setOwnDays] = useState<Map<string, DayStat>>(new Map());
+  const [otherDays, setOtherDays] = useState<Record<string, DayStat[]>>({});
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [now, setNow] = useState(() => Date.now());
   const progressRef = useRef(progress);
   progressRef.current = progress;
-  const daysRef = useRef(days);
-  daysRef.current = days;
+  const daysRef = useRef(ownDays);
+  daysRef.current = ownDays;
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
@@ -59,7 +63,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const [m, data] = await Promise.all([loadManifest(), loadAll()]);
       setManifest(m);
       setProgress(new Map(data.progress.map((p) => [p.id, p])));
-      setDays(new Map(data.days.map((d) => [d.date, d])));
+      setOwnDays(new Map(data.days.map((d) => [d.date, d])));
+      setOtherDays(data.otherDays);
       setSettings(data.settings);
       setReady(true);
       piper.check(data.settings.voice);
@@ -69,10 +74,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    reload();
+    reload().then(() => initSync());
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
   }, [reload]);
+
+  // follow changes that a sync brought in from other devices
+  useEffect(
+    () =>
+      onSyncApplied((r) => {
+        if (r.progressPut.length || r.progressDelete.length) {
+          const p = new Map(progressRef.current);
+          for (const id of r.progressDelete) if ((p.get(id)?.last ?? 0) < r.resetAt) p.delete(id);
+          for (const x of r.progressPut) {
+            const cur = p.get(x.id);
+            if (!cur || !newer(cur, x)) p.set(x.id, x);
+          }
+          progressRef.current = p;
+          setProgress(p);
+        }
+        if (r.ownDays) {
+          const ds = new Map(r.ownDays.map((d) => [d.date, d]));
+          daysRef.current = ds;
+          setOwnDays(ds);
+        }
+        setOtherDays(r.otherDays);
+        if (r.settings) {
+          const next = { ...DEFAULT_SETTINGS, ...r.settings.value };
+          settingsRef.current = next;
+          setSettings(next);
+        }
+        setNow(Date.now());
+      }),
+    [],
+  );
 
   // theme
   useEffect(() => {
@@ -101,9 +136,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     progressRef.current = p;
     daysRef.current = ds;
     setProgress(p);
-    setDays(ds);
+    setOwnDays(ds);
     setNow(t);
     await saveAnswer(after, day);
+    markDirty([progressChunk(after.lv), 'days']);
     return { before, after };
   }, []);
 
@@ -111,8 +147,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const next = { ...settingsRef.current, ...patch };
     settingsRef.current = next;
     setSettings(next);
-    saveSettings(next);
+    saveSettings(next, Date.now()).then(() => markDirty(['settings']));
   }, []);
+
+  const days = useMemo(() => {
+    const all = sumDays([[...ownDays.values()], ...Object.values(otherDays)]);
+    return new Map(all.map((d) => [d.date, d]));
+  }, [ownDays, otherDays]);
 
   const derived = useMemo(() => {
     let dueCount = 0;

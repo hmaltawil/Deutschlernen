@@ -9,6 +9,9 @@ import { useVoice } from './useVoice';
 import { VoiceBanner } from './VoiceBanner';
 import { useOffline } from './useOffline';
 import { removeSavedRecordings, saveAllRecordings, stopSavingRecordings } from '../lib/offline';
+import { allChunkIds } from '../lib/sync/core';
+import { markDirty, syncNow } from '../lib/sync/engine';
+import { SyncSection, useSync } from './Sync';
 
 function OfflineSection() {
   const off = useOffline();
@@ -98,8 +101,15 @@ function Toggle({ id, checked, onChange }: { id: string; checked: boolean; onCha
   return <input id={id} type="checkbox" role="switch" className="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />;
 }
 
-export function SettingsPage() {
-  const { settings, updateSettings, reload } = useStore();
+export function SettingsPage({ joinCode }: { joinCode?: string }) {
+  const { settings, updateSettings, reload, manifest } = useStore();
+  const sync = useSync();
+  const syncing = sync.state !== 'off' && sync.state !== 'unavailable';
+  const resyncAll = () => {
+    if (!syncing || !manifest) return;
+    markDirty(allChunkIds(manifest.levels.map((l) => l.n)));
+    syncNow();
+  };
   const voice = useVoice();
   const fileRef = useRef<HTMLInputElement>(null);
   const [msg, setMsg] = useState('');
@@ -126,16 +136,19 @@ export function SettingsPage() {
       if (!confirm('Replace all progress on this device with this backup?')) return;
       await importBackup(data);
       await reload();
-      setMsg('Backup restored.');
+      resyncAll();
+      setMsg(syncing ? 'Backup restored and combined with your synced progress.' : 'Backup restored.');
     } catch (e) {
       setMsg((e as Error).message);
     }
   };
 
   const doReset = async () => {
-    if (!confirm('Delete all progress, points and streaks on this device? This cannot be undone.')) return;
+    const where = syncing ? 'on ALL your synced devices' : 'on this device';
+    if (!confirm(`Delete all progress, points and streaks ${where}? This cannot be undone.`)) return;
     await resetProgress();
     await reload();
+    resyncAll();
     setMsg('Progress reset.');
   };
 
@@ -217,7 +230,7 @@ export function SettingsPage() {
             <option value={1}>Normal</option>
           </select>
         </div>
-        <div className="field">
+        <div className="field stacked">
           <label htmlFor="voice">Neural voice for unrecorded sentences</label>
           <select id="voice" value={settings.voice} onChange={(e) => setVoice(e.target.value)}>
             {VOICES.map((v) => (
@@ -250,6 +263,8 @@ export function SettingsPage() {
         {sameVoice && (voice.state === 'downloading' || voice.state === 'error') && <VoiceBanner compact />}
       </section>
 
+      <SyncSection joinCode={joinCode} />
+
       <OfflineSection />
 
       <section className="card">
@@ -269,7 +284,9 @@ export function SettingsPage() {
       <section className="card">
         <h2>Your data</h2>
         <p className="small muted" style={{ margin: '6px 0 4px' }}>
-          Progress is stored only in this browser. Export a backup to move it to another device.
+          {syncing
+            ? 'Progress is stored in this browser and synced with your other devices. A backup file is an extra safety copy.'
+            : 'Progress is stored only in this browser. Turn on sync above, or export a backup to move it to another device.'}
         </p>
         <div className="row" style={{ marginTop: 10 }}>
           <button className="btn" onClick={doExport}>

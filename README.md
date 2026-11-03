@@ -11,6 +11,7 @@ A cloze-sentence trainer for German. You learn words by filling the gap in real 
   3. The browser's own voice, used only if the neural voice isn't available.
 - **Works offline.** A service worker saves the app and all 30,000 sentences on the device (~6 MB). Recordings are saved as you hear them, or all at once from Settings → Offline (~150 MB). Without internet, recordings that aren't saved are read by the neural voice.
 - **Stats:** points per day, mastery breakdown, upcoming reviews, progress per level.
+- **Sync between devices (optional).** Settings → Sync gives one device a secret 24-character sync code (with a QR code). Enter it on other devices and progress, points, streaks and settings stay in step. No account is needed; data is stored in Firebase Firestore under the SHA-256 of the code. Each sentence keeps its most recent answer, each device's points add up, and everything keeps working offline and syncs when you reconnect.
 - **Your data stays on your device** (IndexedDB). Settings has export/import for backups.
 
 ## Run it
@@ -47,6 +48,20 @@ Then copy the recordings (~150 MB, about 15 minutes; files you already have are 
 python3 scripts/fetch_audio.py
 ```
 
+## Sync setup (Firebase)
+
+1. Create a free Firebase project and a Firestore database (Standard edition, production mode).
+2. Paste [`firestore.rules`](firestore.rules) into Firestore → Rules and publish.
+3. Register a web app (Project settings → Your apps → `</>`) and put its `firebaseConfig` into `PROJECT` in [`src/lib/sync/config.ts`](src/lib/sync/config.ts). These values are public by design; the rules control access.
+
+Without a config, the sync section is hidden and the app works locally as before.
+
+Test the rules and the sync against the local Firestore emulator (needs Java):
+
+```bash
+npm run test:rules
+```
+
 ## Project layout
 
 | Path | What |
@@ -60,6 +75,8 @@ python3 scripts/fetch_audio.py
 | `src/lib/scoring.ts` | Points, daily stats, streaks |
 | `src/lib/db.ts` | IndexedDB storage, backup export/import |
 | `src/lib/offline.ts` + `vite.config.ts` (VitePWA) | Service worker, offline status, saving recordings |
+| `src/lib/sync/` | Sync: codes (`code.ts`), merge logic (`core.ts`), Firestore (`firestore.ts`), scheduling (`engine.ts`) |
+| `firestore.rules`, `tests/` | Security rules and their emulator tests |
 | `src/lib/audio/` + `src/workers/piper.worker.ts` | Audio sources: recording → neural voice → system voice |
 | `src/components/` | Screens: Home, Play, Levels, Stats, Settings, Credits |
 

@@ -13,10 +13,12 @@ type Req =
 
 const origin = self.location.origin;
 const base = new URL(import.meta.env.BASE_URL, origin).href; // ends with /
+// versioned folder (see scripts/tts-version.mjs) so updates never mix old cached files with new code
+const tts = `${base}tts/${__TTS_VERSION__}/`;
 const wasmPaths = {
-  onnxWasm: `${base}tts/ort/`,
-  piperData: `${base}tts/piper/piper_phonemize.data`,
-  piperWasm: `${base}tts/piper/piper_phonemize.wasm`,
+  onnxWasm: `${tts}ort/`,
+  piperData: `${tts}piper/piper_phonemize.data`,
+  piperWasm: `${tts}piper/piper_phonemize.wasm`,
 };
 
 let session: TtsSession | null = null;

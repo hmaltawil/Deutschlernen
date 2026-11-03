@@ -1,10 +1,12 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { TTS_VERSION } from './scripts/tts-version.mjs';
 
 export default defineConfig({
   // GitHub Pages serves the site from /<repo>/; the deploy workflow sets BASE_PATH.
   base: process.env.BASE_PATH || '/',
+  define: { __TTS_VERSION__: JSON.stringify(TTS_VERSION) },
   plugins: [
     react(),
     VitePWA({
@@ -34,6 +36,9 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
+        // take control on the very first visit, so going offline right away still works
+        clientsClaim: true,
+        skipWaiting: true,
         runtimeCaching: [
           {
             // Neural-voice runtime (ONNX Runtime + phonemizer): cached the first time the voice is used.

@@ -10,6 +10,7 @@ import { useStore } from '../store';
 import { go } from '../router';
 import { IconCheck, IconPlay, IconVolume, IconX } from './Icons';
 import { Ring } from './Ring';
+import { syncSoon } from '../lib/sync/engine';
 
 interface Outcome {
   points: number;
@@ -493,6 +494,7 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onNext }: Ca
 
 function Summary({ results, onAgain }: { results: Result[]; onAgain(): void }) {
   const { settings, days, today } = useStore();
+  useEffect(() => syncSoon(500), []);
   const first = results.filter((r) => !r.retry);
   const points = results.reduce((s, r) => s + r.points, 0);
   const correct = first.filter((r) => r.correct).length;
