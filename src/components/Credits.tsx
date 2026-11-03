@@ -28,7 +28,8 @@ export function Credits() {
           <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noreferrer">
             CC BY-NC 4.0
           </a>
-          . The speaker and licence are shown after each answer. Recordings stream from tatoeba.org.
+          . The speaker and licence are shown after each answer. Copies of the recordings are stored with this app
+          so they can be saved for offline use.
         </p>
         <h2>Neural voice</h2>
         <p style={{ margin: 0 }}>

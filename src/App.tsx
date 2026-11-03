@@ -9,6 +9,7 @@ import { Wordmark } from './components/Wordmark';
 import type { RoundKind } from './lib/session';
 import { useRoute } from './router';
 import { useStore } from './store';
+import { useOnline } from './components/useOffline';
 
 const NAV = [
   { to: '/', label: 'Home', icon: IconHome, match: (p: string) => p === '/' },
@@ -21,6 +22,7 @@ export function App() {
   const { ready, error } = useStore();
   const { path, params } = useRoute();
   const playing = path === '/play';
+  const online = useOnline();
 
   let page: JSX.Element;
   if (error) page = <div className="card">Could not start: {error}</div>;
@@ -41,6 +43,11 @@ export function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <Wordmark />
+          {!online && (
+            <span className="badge" title="No internet connection — everything you need is saved on this device">
+              Offline
+            </span>
+          )}
           <nav className="nav" aria-label="Main">
             {NAV.map(({ to, label, icon: Icon, match }) => (
               <a key={to} href={`#${to}`} aria-current={match(path) ? 'page' : undefined}>

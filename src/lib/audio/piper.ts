@@ -95,7 +95,11 @@ class PiperClient {
     this.set({ state: 'downloading', voiceId, progress: 0, error: undefined });
     this.cache.clear();
     this.loading = this.call<void>({ type: 'load', voiceId }, (f) => this.set({ progress: f }))
-      .then(() => this.set({ state: 'ready', progress: 1 }))
+      .then(() => {
+        this.set({ state: 'ready', progress: 1 });
+        this.primeOffline(voiceId);
+        navigator.storage?.persist?.().catch(() => {});
+      })
       .catch((e: Error) => {
         this.set({ state: 'error', error: e.message });
         throw e;
@@ -110,6 +114,20 @@ class PiperClient {
   warm(voiceId: string): void {
     if (this.status.state !== 'ready' || this.status.voiceId !== voiceId || this.loading) return;
     this.call({ type: 'load', voiceId }).catch(() => {});
+    this.primeOffline(voiceId);
+  }
+
+  private primed = false;
+  /**
+   * Speak a word once in the background so every runtime file the voice needs
+   * (WASM, phonemizer data) is fetched now and kept by the offline cache.
+   */
+  private primeOffline(voiceId: string) {
+    if (this.primed) return;
+    this.primed = true;
+    this.synth('Hallo.', voiceId).catch(() => {
+      this.primed = false;
+    });
   }
 
   async remove(voiceId: string): Promise<void> {

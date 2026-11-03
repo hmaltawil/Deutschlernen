@@ -37,6 +37,8 @@ export interface Manifest {
   total: number;
   audio: number;
   words: number;
+  /** total size of the stored recordings (set by scripts/fetch_audio.py) */
+  audioBytes?: number;
   levels: LevelInfo[];
   credits: { sentences: string; audio: string };
 }
@@ -85,7 +87,13 @@ export async function getItems(refs: { id: number; lv: number }[]): Promise<Item
   return refs.map((r) => byId.get(r.id)).filter((x): x is Item => !!x);
 }
 
+/** Recording copied into this app (public/audio), cached for offline use by the service worker. */
 export function audioUrl(au: NonNullable<Item['au']>): string {
+  return `${base}audio/${au[0]}.mp3`;
+}
+
+/** The original on tatoeba.org — fallback if the local copy is missing. */
+export function remoteAudioUrl(au: NonNullable<Item['au']>): string {
   return `https://tatoeba.org/en/audio/download/${au[0]}`;
 }
 

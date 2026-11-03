@@ -7,6 +7,92 @@ import { ModePicker } from './Home';
 import { IconDownload, IconVolume } from './Icons';
 import { useVoice } from './useVoice';
 import { VoiceBanner } from './VoiceBanner';
+import { useOffline } from './useOffline';
+import { removeSavedRecordings, saveAllRecordings, stopSavingRecordings } from '../lib/offline';
+
+function OfflineSection() {
+  const off = useOffline();
+  const voice = useVoice();
+  const { settings } = useStore();
+  const voiceReady = voice.state === 'ready' && voice.voiceId === settings.voice;
+  const mb = Math.round(off.bytes / 1e6);
+  const pct = off.job ? Math.round((off.job.done / Math.max(off.job.todo, 1)) * 100) : 0;
+  return (
+    <section className="card">
+      <h2>Offline</h2>
+      <div className="field">
+        <label>App and all sentences</label>
+        <span className="small" style={{ fontWeight: 600 }}>
+          {off.app === 'ready' ? 'Saved on this device ✓' : off.app === 'saving' ? 'Saving…' : 'Not available here'}
+        </span>
+        <span className="hint">
+          {off.app === 'unsupported'
+            ? 'Offline mode works in the published app (not in development mode) in modern browsers.'
+            : 'The app opens and works without internet. Progress is always saved on this device.'}
+        </span>
+      </div>
+      <div className="field">
+        <label>Neural voice</label>
+        <span className="small" style={{ fontWeight: 600 }}>
+          {voiceReady ? 'Downloaded ✓' : 'Not downloaded'}
+        </span>
+        <span className="hint">
+          {voiceReady
+            ? 'Speaks every sentence without internet.'
+            : 'Download it in Audio above so sentences can be spoken without internet.'}
+        </span>
+      </div>
+      <div className="field">
+        <label>Native-speaker recordings</label>
+        <span className="small" style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+          {off.saved.toLocaleString()} / {off.total.toLocaleString()} saved
+        </span>
+        <span className="hint">
+          Recordings are saved as you hear them. Save all of them (about {mb} MB) to hear native speakers offline
+          too; otherwise the neural voice reads unsaved ones.
+        </span>
+        {off.job && (
+          <div style={{ gridColumn: '1 / -1', marginTop: 6 }} className="stack">
+            <div className="meter thin" aria-label={`Saving recordings ${pct}%`}>
+              <span style={{ width: `${pct}%` }} />
+            </div>
+            <span className="tiny muted">
+              Saving… {off.job.done.toLocaleString()} / {off.job.todo.toLocaleString()}
+            </span>
+          </div>
+        )}
+        {off.error && (
+          <span className="hint" style={{ color: 'var(--bad)' }}>
+            {off.error}
+          </span>
+        )}
+        {off.app !== 'unsupported' && (
+          <div className="row" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
+            {off.job ? (
+              <button className="btn" onClick={stopSavingRecordings}>
+                Stop
+              </button>
+            ) : (
+              off.saved < off.total && (
+                <button className="btn primary" onClick={() => saveAllRecordings()}>
+                  <IconDownload size={18} /> Save all recordings
+                </button>
+              )
+            )}
+            {!off.job && off.saved > 0 && (
+              <button
+                className="btn ghost danger"
+                onClick={() => confirm('Remove saved recordings from this device?') && removeSavedRecordings()}
+              >
+                Remove saved recordings
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
 
 function Toggle({ id, checked, onChange }: { id: string; checked: boolean; onChange(v: boolean): void }) {
   return <input id={id} type="checkbox" role="switch" className="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />;
@@ -142,7 +228,7 @@ export function SettingsPage() {
           </select>
           <span className="hint">
             Sentences with a native-speaker recording always use it. The neural voice runs on your device (Piper); it is
-            downloaded once and then works offline.{' '}
+            downloaded once, stored on this device, and works offline.{' '}
             {sameVoice && voice.state === 'ready' && <strong>Downloaded ✓</strong>}
           </span>
           <div className="row" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
@@ -163,6 +249,8 @@ export function SettingsPage() {
         </div>
         {sameVoice && (voice.state === 'downloading' || voice.state === 'error') && <VoiceBanner compact />}
       </section>
+
+      <OfflineSection />
 
       <section className="card">
         <h2>Appearance</h2>

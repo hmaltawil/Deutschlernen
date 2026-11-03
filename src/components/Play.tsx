@@ -229,7 +229,7 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onNext }: Ca
 
   const speak = useCallback(async () => {
     try {
-      const src = await play(item, settings.rate, settings.voice);
+      const src = await play(item, settings.rate, settings.voice, setSource);
       if (src) setSource(src);
       setBlocked(false);
     } catch {

@@ -6,9 +6,10 @@ A cloze-sentence trainer for German. You learn words by filling the gap in real 
 - **Three ways to answer:** multiple choice (4 pts), typing (8 pts) or listening (10 pts). A streak of correct answers adds up to +50%.
 - **Spaced repetition.** Each correct answer moves a sentence 25% → 50% → 75% → 100% and waits 1 / 7 / 30 / 120 days before the next review (you can change the intervals). A wrong answer resets it to 0% and asks it again at the end of the round.
 - **Natural audio, best source first:**
-  1. **Native-speaker recordings** for ~10,900 sentences, streamed from Tatoeba.
+  1. **Native-speaker recordings** for ~10,900 sentences. Copies are stored with the app in `public/audio/`, with tatoeba.org as a fallback.
   2. **Neural German voice** for everything else. Piper runs on your device and is downloaded once (~63 MB). After that it works offline.
   3. The browser's own voice, used only if the neural voice isn't available.
+- **Works offline.** A service worker saves the app and all 30,000 sentences on the device (~6 MB). Recordings are saved as you hear them, or all at once from Settings → Offline (~150 MB). Without internet, recordings that aren't saved are read by the neural voice.
 - **Stats:** points per day, mastery breakdown, upcoming reviews, progress per level.
 - **Your data stays on your device** (IndexedDB). Settings has export/import for backups.
 
@@ -34,10 +35,16 @@ npm test
 
 ## Rebuild the sentence deck
 
-`public/deck/` is generated and already included. To rebuild it from the latest Tatoeba export (downloads ~40 MB into `data/raw/`, takes about a minute):
+`public/deck/` and `public/audio/` are generated and already included. To rebuild them from the latest Tatoeba export (downloads ~40 MB into `data/raw/`, takes about a minute):
 
 ```bash
 python3 scripts/build_deck.py            # options: --target 30000 --per-word-audio 8
+```
+
+Then copy the recordings (~150 MB, about 15 minutes; files you already have are skipped):
+
+```bash
+python3 scripts/fetch_audio.py
 ```
 
 ## Project layout
@@ -45,19 +52,21 @@ python3 scripts/build_deck.py            # options: --target 30000 --per-word-au
 | Path | What |
 |---|---|
 | `scripts/build_deck.py` | Deck builder: frequency ranking, cloze choice, distractors, levels |
+| `scripts/fetch_audio.py` | Copies the deck's recordings from Tatoeba into `public/audio/` |
 | `scripts/copy-tts-assets.mjs` | Copies the ONNX Runtime + Piper phonemizer WASM into `public/tts/` (runs automatically) |
 | `src/lib/srs.ts` | Spaced-repetition scheduling |
 | `src/lib/session.ts` | Builds rounds (due reviews first, then new sentences by level) |
 | `src/lib/answer.ts` | Answer checking (case-insensitive; accepts ae/oe/ue/ss) |
 | `src/lib/scoring.ts` | Points, daily stats, streaks |
 | `src/lib/db.ts` | IndexedDB storage, backup export/import |
+| `src/lib/offline.ts` + `vite.config.ts` (VitePWA) | Service worker, offline status, saving recordings |
 | `src/lib/audio/` + `src/workers/piper.worker.ts` | Audio sources: recording → neural voice → system voice |
 | `src/components/` | Screens: Home, Play, Levels, Stats, Settings, Credits |
 
 ## Licences & credits
 
 - Sentences and translations: [Tatoeba](https://tatoeba.org), CC BY 2.0 FR.
-- Recordings: Tatoeba contributors, **CC BY 4.0 or CC BY-NC 4.0**. The speaker and licence are shown on every card. Because some recordings are NC (non-commercial), don't use the app commercially without first removing them. Recordings with no reusable licence are not used.
+- Recordings: Tatoeba contributors, **CC BY 4.0 or CC BY-NC 4.0**, redistributed here with attribution. The speaker and licence are shown on every card. Because some recordings are NC (non-commercial), don't use the app commercially without first removing them. Recordings with no reusable licence are not used.
 - Neural voice: Piper (MIT), piper-tts-web (MIT), ONNX Runtime Web (MIT). Voice models are by their dataset authors; see each model card.
 
 Lücke is an independent project, not affiliated with any other language-learning service.
