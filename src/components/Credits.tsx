@@ -1,0 +1,55 @@
+import { useStore } from '../store';
+
+export function Credits() {
+  const { manifest } = useStore();
+  return (
+    <div className="stack" style={{ gap: 20 }}>
+      <h1>Credits</h1>
+      <section className="card stack" style={{ gap: 12 }}>
+        <h2>Sentences</h2>
+        <p style={{ margin: 0 }}>
+          All {manifest?.total.toLocaleString()} sentences and their English translations come from{' '}
+          <a href="https://tatoeba.org" target="_blank" rel="noreferrer">
+            Tatoeba
+          </a>
+          , a collaborative collection of sentences, licensed{' '}
+          <a href="https://creativecommons.org/licenses/by/2.0/fr/" target="_blank" rel="noreferrer">
+            CC BY 2.0 FR
+          </a>
+          . Each card links to its original sentence.
+        </p>
+        <h2>Native-speaker recordings</h2>
+        <p style={{ margin: 0 }}>
+          {manifest?.audio.toLocaleString()} sentences have recordings by Tatoeba contributors, used under{' '}
+          <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">
+            CC BY 4.0
+          </a>{' '}
+          or{' '}
+          <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noreferrer">
+            CC BY-NC 4.0
+          </a>
+          . The speaker and licence are shown after each answer. Recordings stream from tatoeba.org.
+        </p>
+        <h2>Neural voice</h2>
+        <p style={{ margin: 0 }}>
+          Sentences without a recording are spoken on your device by{' '}
+          <a href="https://github.com/rhasspy/piper" target="_blank" rel="noreferrer">
+            Piper
+          </a>{' '}
+          (MIT) through ONNX Runtime Web (MIT) and piper-tts-web (MIT). German voice models (Thorsten, Kerstin, Ramona,
+          Eva) are by their dataset authors; see each model card on{' '}
+          <a href="https://huggingface.co/rhasspy/piper-voices/tree/main/de/de_DE" target="_blank" rel="noreferrer">
+            Hugging Face
+          </a>{' '}
+          for its licence.
+        </p>
+        <h2>How the deck is built</h2>
+        <p style={{ margin: 0 }}>
+          Every German word form in Tatoeba is ranked by frequency. Each sentence teaches its rarest common word, so level 1
+          covers the most frequent words and later levels move down the list. Sentences with native-speaker audio are
+          preferred.
+        </p>
+      </section>
+    </div>
+  );
+}

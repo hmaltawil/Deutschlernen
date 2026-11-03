@@ -1,0 +1,32 @@
+{
+  "name": "luecke",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/copy-tts-assets.mjs",
+    "dev": "node scripts/copy-tts-assets.mjs && vite",
+    "build": "node scripts/copy-tts-assets.mjs && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "deck": "python3 scripts/build_deck.py"
+  },
+  "dependencies": {
+    "@diffusionstudio/piper-wasm": "1.0.0",
+    "@mintplex-labs/piper-tts-web": "1.0.5",
+    "idb": "^8.0.4",
+    "onnxruntime-web": "1.20.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "fake-indexeddb": "^6.2.7",
+    "typescript": "5.7",
+    "vite": "^6.4.5",
+    "vitest": "^3.2.7"
+  }
+}

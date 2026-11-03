@@ -1,0 +1,254 @@
+{
+ "version": 1,
+ "language": "de",
+ "hintLanguage": "en",
+ "total": 30000,
+ "audio": 10923,
+ "words": 8936,
+ "levels": [
+  {
+   "n": 1,
+   "file": "level-01.json",
+   "count": 1000,
+   "audio": 783,
+   "minRank": 1,
+   "maxRank": 385
+  },
+  {
+   "n": 2,
+   "file": "level-02.json",
+   "count": 1000,
+   "audio": 871,
+   "minRank": 39,
+   "maxRank": 669
+  },
+  {
+   "n": 3,
+   "file": "level-03.json",
+   "count": 1000,
+   "audio": 850,
+   "minRank": 142,
+   "maxRank": 944
+  },
+  {
+   "n": 4,
+   "file": "level-04.json",
+   "count": 1000,
+   "audio": 815,
+   "minRank": 242,
+   "maxRank": 1232
+  },
+  {
+   "n": 5,
+   "file": "level-05.json",
+   "count": 1000,
+   "audio": 772,
+   "minRank": 347,
+   "maxRank": 1531
+  },
+  {
+   "n": 6,
+   "file": "level-06.json",
+   "count": 1000,
+   "audio": 711,
+   "minRank": 456,
+   "maxRank": 1832
+  },
+  {
+   "n": 7,
+   "file": "level-07.json",
+   "count": 1000,
+   "audio": 669,
+   "minRank": 565,
+   "maxRank": 2143
+  },
+  {
+   "n": 8,
+   "file": "level-08.json",
+   "count": 1000,
+   "audio": 622,
+   "minRank": 681,
+   "maxRank": 2467
+  },
+  {
+   "n": 9,
+   "file": "level-09.json",
+   "count": 1000,
+   "audio": 552,
+   "minRank": 796,
+   "maxRank": 2802
+  },
+  {
+   "n": 10,
+   "file": "level-10.json",
+   "count": 1000,
+   "audio": 498,
+   "minRank": 921,
+   "maxRank": 3155
+  },
+  {
+   "n": 11,
+   "file": "level-11.json",
+   "count": 1000,
+   "audio": 453,
+   "minRank": 1060,
+   "maxRank": 3515
+  },
+  {
+   "n": 12,
+   "file": "level-12.json",
+   "count": 1000,
+   "audio": 404,
+   "minRank": 1192,
+   "maxRank": 3893
+  },
+  {
+   "n": 13,
+   "file": "level-13.json",
+   "count": 1000,
+   "audio": 360,
+   "minRank": 1314,
+   "maxRank": 4267
+  },
+  {
+   "n": 14,
+   "file": "level-14.json",
+   "count": 1000,
+   "audio": 326,
+   "minRank": 1477,
+   "maxRank": 4651
+  },
+  {
+   "n": 15,
+   "file": "level-15.json",
+   "count": 1000,
+   "audio": 277,
+   "minRank": 1592,
+   "maxRank": 5038
+  },
+  {
+   "n": 16,
+   "file": "level-16.json",
+   "count": 1000,
+   "audio": 258,
+   "minRank": 1740,
+   "maxRank": 5434
+  },
+  {
+   "n": 17,
+   "file": "level-17.json",
+   "count": 1000,
+   "audio": 239,
+   "minRank": 1923,
+   "maxRank": 5835
+  },
+  {
+   "n": 18,
+   "file": "level-18.json",
+   "count": 1000,
+   "audio": 213,
+   "minRank": 2025,
+   "maxRank": 6237
+  },
+  {
+   "n": 19,
+   "file": "level-19.json",
+   "count": 1000,
+   "audio": 186,
+   "minRank": 2194,
+   "maxRank": 6650
+  },
+  {
+   "n": 20,
+   "file": "level-20.json",
+   "count": 1000,
+   "audio": 180,
+   "minRank": 2405,
+   "maxRank": 7062
+  },
+  {
+   "n": 21,
+   "file": "level-21.json",
+   "count": 1000,
+   "audio": 145,
+   "minRank": 2540,
+   "maxRank": 7482
+  },
+  {
+   "n": 22,
+   "file": "level-22.json",
+   "count": 1000,
+   "audio": 137,
+   "minRank": 2632,
+   "maxRank": 7898
+  },
+  {
+   "n": 23,
+   "file": "level-23.json",
+   "count": 1000,
+   "audio": 127,
+   "minRank": 2774,
+   "maxRank": 8324
+  },
+  {
+   "n": 24,
+   "file": "level-24.json",
+   "count": 1000,
+   "audio": 112,
+   "minRank": 3010,
+   "maxRank": 8752
+  },
+  {
+   "n": 25,
+   "file": "level-25.json",
+   "count": 1000,
+   "audio": 111,
+   "minRank": 3197,
+   "maxRank": 9183
+  },
+  {
+   "n": 26,
+   "file": "level-26.json",
+   "count": 1000,
+   "audio": 78,
+   "minRank": 3337,
+   "maxRank": 9342
+  },
+  {
+   "n": 27,
+   "file": "level-27.json",
+   "count": 1000,
+   "audio": 51,
+   "minRank": 3525,
+   "maxRank": 8397
+  },
+  {
+   "n": 28,
+   "file": "level-28.json",
+   "count": 1000,
+   "audio": 49,
+   "minRank": 4135,
+   "maxRank": 8989
+  },
+  {
+   "n": 29,
+   "file": "level-29.json",
+   "count": 1000,
+   "audio": 34,
+   "minRank": 4135,
+   "maxRank": 9340
+  },
+  {
+   "n": 30,
+   "file": "level-30.json",
+   "count": 1000,
+   "audio": 40,
+   "minRank": 5546,
+   "maxRank": 9340
+  }
+ ],
+ "credits": {
+  "sentences": "Sentences and translations from Tatoeba (https://tatoeba.org), CC BY 2.0 FR.",
+  "audio": "Native-speaker recordings from Tatoeba contributors, CC BY 4.0 / CC BY-NC 4.0 as marked."
+ }
+}
