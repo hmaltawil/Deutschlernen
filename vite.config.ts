@@ -47,7 +47,8 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'recordings',
-              cacheableResponse: { statuses: [200], headers: { 'content-type': 'audio/mpeg' } },
+              // GitHub Pages sends audio/mp3, other servers audio/mpeg; a non-audio answer is purged by the player
+              cacheableResponse: { statuses: [200] },
               expiration: { maxEntries: 20000 },
             },
           },

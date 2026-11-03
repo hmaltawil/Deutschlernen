@@ -32,7 +32,12 @@ function clip(url: string): Promise<string> {
     return hit;
   }
   const p = fetch(url).then(async (r) => {
-    if (!r.ok || !(r.headers.get('content-type') ?? '').startsWith('audio/')) throw new Error(`recording unavailable (${r.status})`);
+    if (r.ok && !(r.headers.get('content-type') ?? '').startsWith('audio/')) {
+      // a server answered with something else (e.g. a web page): don't keep it in the offline cache
+      caches?.open('recordings').then((c) => c.delete(url)).catch(() => {});
+      throw new Error('recording unavailable');
+    }
+    if (!r.ok) throw new Error(`recording unavailable (${r.status})`);
     return URL.createObjectURL(await r.blob());
   });
   p.catch(() => clips.delete(url));
