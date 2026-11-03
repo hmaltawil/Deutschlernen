@@ -250,5 +250,6 @@
  "credits": {
   "sentences": "Sentences and translations from Tatoeba (https://tatoeba.org), CC BY 2.0 FR.",
   "audio": "Native-speaker recordings from Tatoeba contributors, CC BY 4.0 / CC BY-NC 4.0 as marked."
- }
+ },
+ "audioBytes": 147506291
 }
