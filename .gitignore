@@ -5,3 +5,4 @@ public/tts
 *.tsbuildinfo
 *-debug.log
 data/audio
+tests/e2e/screenshots

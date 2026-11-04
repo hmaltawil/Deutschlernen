@@ -11,7 +11,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "deck": "python3 scripts/build_deck.py",
-    "test:rules": "npx -y firebase-tools@15.34.0 emulators:exec --only firestore --project demo-luecke 'vitest run --config vitest.rules.config.ts'"
+    "test:rules": "npx -y firebase-tools@15.34.0 emulators:exec --only firestore --project demo-luecke 'vitest run --config vitest.rules.config.ts'",
+    "e2e": "bash tests/e2e/run-all.sh"
   },
   "dependencies": {
     "@diffusionstudio/piper-wasm": "1.0.0",
