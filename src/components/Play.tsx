@@ -498,13 +498,15 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
             </div>
           )}
           <div className="spread">
-            <div className="umlauts" aria-label="Insert special characters">
-              {['ä', 'ö', 'ü', 'ß'].map((c) => (
-                <button type="button" key={c} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(c)}>
-                  {c}
-                </button>
-              ))}
-            </div>
+            {settings.umlautButtons && (
+              <div className="umlauts" aria-label="Insert special characters">
+                {['ä', 'ö', 'ü', 'ß'].map((c) => (
+                  <button type="button" key={c} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(c)}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="row" style={{ gap: 6 }}>
               <button type="button" className="btn ghost" onClick={useHint} disabled={hint}>
                 Hint

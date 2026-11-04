@@ -135,7 +135,7 @@ runtime files under `/tts/<TTS_VERSION>/`. **Recordings are never put in Cache S
 - Merge (`src/lib/sync/core.ts`, pure + unit-tested): per sentence the latest answer wins; each device
   owns its own day stats (totals are sums); newer settings win; "Reset progress" stores `resetAt` and
   clears every device. "Known" is an optional 8th column in progress rows.
-- **Device-only settings** (`DEVICE_SETTINGS` in `src/lib/settings.ts`: voice, theme, autoSaveRecordings)
+- **Device-only settings** (`DEVICE_SETTINGS` in `src/lib/settings.ts`: voice, theme, autoSaveRecordings, umlautButtons)
   are never taken from another device (a synced voice used to leave the other device on the robotic
   browser voice). They are still uploaded, so devices on an older version keep theirs. Changing only
   those doesn't bump `settingsUpdated`.

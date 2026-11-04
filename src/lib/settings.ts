@@ -30,6 +30,8 @@ export interface Settings {
   strictUmlauts: boolean;
   /** Type/Listen: one more try when the answer is one letter off or misses umlaut dots */
   secondTry: boolean;
+  /** Type/Listen: buttons for ä, ö, ü, ß under the sentence (for keyboards without them; per device) */
+  umlautButtons: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -48,13 +50,15 @@ export const DEFAULT_SETTINGS: Settings = {
   fitBox: true,
   strictUmlauts: false,
   secondTry: false,
+  umlautButtons: false,
 };
 
 /**
  * Settings that belong to one device and are never taken from another one: the neural voice (it has to be
- * downloaded on each device), the theme, and whether recordings are saved automatically.
+ * downloaded on each device), the theme, whether recordings are saved automatically, and the
+ * ä/ö/ü/ß buttons (a phone keyboard has these letters, a computer keyboard often not).
  */
-export const DEVICE_SETTINGS = ['voice', 'theme', 'autoSaveRecordings'] as const satisfies readonly (keyof Settings)[];
+export const DEVICE_SETTINGS = ['voice', 'theme', 'autoSaveRecordings', 'umlautButtons'] as const satisfies readonly (keyof Settings)[];
 const isDeviceKey = (k: string) => (DEVICE_SETTINGS as readonly string[]).includes(k);
 
 /** Only the device-only settings. */

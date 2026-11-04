@@ -1,4 +1,4 @@
-// Settings → "While you answer": speaker before answering, colour hint, box size,
+// Settings → "While you answer": speaker before answering, colour hint, box size, ä ö ü ß buttons,
 // strict umlauts and second try for small typos.
 const { chromium } = require('playwright');
 const { shots } = require('./_lib.cjs');
@@ -96,6 +96,7 @@ const fold = (s) => s.replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, '
 
   // card 1: box size, colour hint, second try
   let a = await card();
+  ok(!(await page.$('.umlauts')), 'no ä ö ü ß buttons by default');
   ok((await page.$eval('.blank-input', (e) => e.style.width)) === '8ch', `same-size box: 8ch for "${a}" (${a.length} letters)`);
   await page.fill('.blank-input', a.slice(0, 2).toLowerCase());
   ok(await page.$eval('.blank-input', (e) => e.classList.contains('on-track')), 'colour hint: green while the start matches');
@@ -142,9 +143,14 @@ const fold = (s) => s.replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, '
   await toggle('strict-umlauts', false);
   await toggle('second-try', false);
   await toggle('fit-box', true);
+  await toggle('umlaut-buttons', true);
   await page.goto(U + `#/play?kind=review`); // the umlaut sentence answered wrong is due again
   await page.waitForSelector('.blank-input');
   a = await card();
+  ok((await page.$$('.umlauts button')).length === 4, 'the ä ö ü ß buttons come back with the option');
+  await page.click('.umlauts button:has-text("ü")');
+  ok((await page.inputValue('.blank-input')) === 'ü', '…and type into the box');
+  await page.fill('.blank-input', '');
   ok((await page.$eval('.blank-input', (e) => e.style.width)) === `${Math.max(a.length + 1, 5)}ch`, 'box fits the word again when the option is on');
   for (let i = 0; i < 6 && !um(a); i++) {
     await page.fill('.blank-input', a);

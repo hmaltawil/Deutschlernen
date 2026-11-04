@@ -261,6 +261,14 @@ export function SettingsPage({ joinCode }: { joinCode?: string }) {
           </span>
         </div>
         <div className="field">
+          <label htmlFor="umlaut-buttons">ä ö ü ß buttons</label>
+          <Toggle id="umlaut-buttons" checked={settings.umlautButtons} onChange={(v) => updateSettings({ umlautButtons: v })} />
+          <span className="hint">
+            Buttons under the sentence for typing ä, ö, ü and ß. Turn on if your keyboard doesn’t have them (on a computer,
+            for example). Set separately on each device.
+          </span>
+        </div>
+        <div className="field">
           <label htmlFor="strict-umlauts">Require ä, ö, ü and ß</label>
           <Toggle id="strict-umlauts" checked={settings.strictUmlauts} onChange={(v) => updateSettings({ strictUmlauts: v })} />
           <span className="hint">When off, ae, oe, ue and ss also count (“fuer” for “für”).</span>
