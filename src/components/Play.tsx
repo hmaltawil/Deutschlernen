@@ -17,6 +17,8 @@ interface Outcome {
   points: number;
   before: Progress | null;
   after: Progress | null;
+  /** settles once the answer is stored on the device */
+  saved: Promise<void>;
 }
 
 interface Result extends Outcome {
@@ -96,14 +98,14 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
   }, [cards, idx, settings.voice]);
 
   const onAnswer = useCallback(
-    async (correct: boolean, given: string, hint: boolean, usedMode: Mode): Promise<Outcome> => {
+    (correct: boolean, given: string, hint: boolean, usedMode: Mode): Outcome => {
       const card = cards[idx];
       const points = correct && !card.retry ? pointsFor(usedMode, combo, hint) : 0;
-      const { before, after } = await store.recordAnswer({ item: card.item, correct, points, isNew: card.isNew, retry: card.retry });
+      const { before, after, saved } = store.recordAnswer({ item: card.item, correct, points, isNew: card.isNew, retry: card.retry });
       if (!card.retry) setCombo((c) => (correct ? c + 1 : 0));
       setCards((cs) => requeue(cs, idx, correct));
-      setResults((rs) => [...rs, { item: card.item, correct, points, isNew: card.isNew, retry: card.retry, given, before, after }]);
-      return { points, before, after };
+      setResults((rs) => [...rs, { item: card.item, correct, points, isNew: card.isNew, retry: card.retry, given, before, after, saved }]);
+      return { points, before, after, saved };
     },
     [cards, idx, combo, store],
   );
@@ -232,7 +234,7 @@ interface CardProps {
   settings: Settings;
   isLast: boolean;
   stage: number;
-  onAnswer(correct: boolean, given: string, hint: boolean, usedMode: Mode): Promise<Outcome>;
+  onAnswer(correct: boolean, given: string, hint: boolean, usedMode: Mode): Outcome;
   /** mark as known (or undo); resolves with the record from before the change */
   onKnown(known: boolean, restore: Progress | null): Promise<Progress | null>;
   onNext(): void;
@@ -257,12 +259,13 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
   const [known, setKnown] = useState(false);
   const [beforeKnown, setBeforeKnown] = useState<Progress | null>(null);
   const answerSaved = useRef<Promise<unknown> | null>(null);
+  const [saveError, setSaveError] = useState(false);
   const knownBusy = useRef(false);
   const toggleKnown = useCallback(async () => {
     if (knownBusy.current) return;
     knownBusy.current = true;
     try {
-      await answerSaved.current; // K right after answering: wait until the answer is stored
+      await answerSaved.current; // keep the order: the answer is stored before the "known" mark
       if (!known) {
         setKnown(true);
         setBeforeKnown(await onKnown(true, null));
@@ -270,6 +273,8 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
         setKnown(false);
         await onKnown(false, beforeKnown);
       }
+    } catch {
+      setSaveError(true);
     } finally {
       knownBusy.current = false;
     }
@@ -305,11 +310,12 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
       setRevealed(true);
       if (fromChoice) setChosen(value);
       const used: Mode = mode === 'listen' && revealedEarly ? 'text' : mode;
-      const saving = onAnswer(v === 'correct', value, hint, used);
-      answerSaved.current = saving;
-      const res = await saving;
-      setOutcome(res);
+      // play first, while the tap is fresh (iPhone only lets sound start right after a tap)
       if (settings.autoplay) speak();
+      const res = onAnswer(v === 'correct', value, hint, used);
+      setOutcome(res);
+      answerSaved.current = res.saved.catch(() => {});
+      res.saved.catch(() => setSaveError(true));
     },
     [verdict, item.a, mode, revealedEarly, hint, onAnswer, settings.autoplay, speak],
   );
@@ -521,6 +527,11 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
             </div>
           )}
           {card.retry && <div className="small muted">Practice round — no points, schedule unchanged.</div>}
+          {saveError && (
+            <div className="small" role="alert" style={{ color: 'var(--bad)' }}>
+              This answer couldn’t be saved on your device. Close the app completely and open it again.
+            </div>
+          )}
           <div className="audio-row">
             <button type="button" className="btn" onClick={speak}>
               <IconVolume size={18} /> Listen <span className="kbd">R</span>

@@ -29,7 +29,11 @@ interface Store {
   dueCount: number;
   playedPerLevel: Map<number, number>;
   masteredPerLevel: Map<number, number>;
-  recordAnswer(a: AnswerInput): Promise<{ before: Progress | null; after: Progress | null }>;
+  /**
+   * Record an answer. The new state is returned right away; `saved` settles when it is
+   * stored on the device (the card never waits for it).
+   */
+  recordAnswer(a: AnswerInput): { before: Progress | null; after: Progress | null; saved: Promise<void> };
   /**
    * Mark a played sentence as known (never reviewed) or put it back into reviews.
    * `restore` brings back an earlier state (undo right after marking).
@@ -140,8 +144,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     else root.setAttribute('data-theme', settings.theme);
   }, [settings.theme]);
 
-  const recordAnswer = useCallback(async (a: AnswerInput) => {
-    if (a.retry) return { before: progressRef.current.get(a.item.id) ?? null, after: null };
+  const recordAnswer = useCallback((a: AnswerInput) => {
+    if (a.retry) return { before: progressRef.current.get(a.item.id) ?? null, after: null, saved: Promise.resolve() };
     const t = Date.now();
     const today = dayKey(t);
     const before = progressRef.current.get(a.item.id) ?? null;
@@ -162,9 +166,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setProgress(p);
     setOwnDays(ds);
     setNow(t);
-    await saveAnswer(after, day);
-    markDirty([progressChunk(after.lv, deckVersionRef.current), 'days']);
-    return { before, after };
+    const saved = saveAnswer(after, day).then(() => markDirty([progressChunk(after.lv, deckVersionRef.current), 'days']));
+    return { before, after, saved };
   }, []);
 
   const setKnown = useCallback(async (id: number, known: boolean, restore?: Progress | null) => {

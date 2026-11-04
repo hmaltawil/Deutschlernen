@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { exportBackup, importBackup, loadAll, migrateProgress, resetProgress, saveAnswer, saveSettings, validateBackup } from './db';
+import { db, exportBackup, importBackup, isConnectionLost, loadAll, migrateProgress, resetProgress, saveAnswer, saveSettings, validateBackup } from './db';
 import { newProgress } from './srs';
 import { emptyDay } from './scoring';
 import { DEFAULT_SETTINGS } from './settings';
@@ -33,5 +33,16 @@ describe('db', () => {
     expect(changed).toBe(2);
     const all = (await loadAll()).progress.sort((a, b) => a.id - b.id);
     expect(all.map((p) => [p.id, p.lv])).toEqual([[1, 1], [2, 7]]);
+  });
+  it('reconnects when the browser dropped the database connection (iPhone in the background)', async () => {
+    await resetProgress();
+    (await db()).close(); // what Safari effectively does to a backgrounded app
+    await saveAnswer(newProgress(42, 1, 1000), { ...emptyDay('2026-11-04'), points: 4 });
+    expect((await loadAll()).progress.map((p) => p.id)).toEqual([42]);
+  });
+  it('recognises Safari\'s lost-connection errors', () => {
+    expect(isConnectionLost(new DOMException('Connection to Indexed Database server lost. Refresh the page to try again', 'UnknownError'))).toBe(true);
+    expect(isConnectionLost(new DOMException('The database connection is closing.', 'InvalidStateError'))).toBe(true);
+    expect(isConnectionLost(new DOMException('Key already exists', 'ConstraintError'))).toBe(false);
   });
 });

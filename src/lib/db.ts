@@ -39,27 +39,69 @@ export interface LocalData {
 let dbp: Promise<IDBPDatabase<LueckeDB>> | null = null;
 
 export function db(): Promise<IDBPDatabase<LueckeDB>> {
-  dbp ??= openDB<LueckeDB>('luecke', 1, {
-    upgrade(d) {
-      const p = d.createObjectStore('progress', { keyPath: 'id' });
-      p.createIndex('due', 'due');
-      d.createObjectStore('days', { keyPath: 'date' });
-      d.createObjectStore('kv');
-    },
-  });
+  if (!dbp) {
+    const opening = openDB<LueckeDB>('luecke', 1, {
+      upgrade(d) {
+        const p = d.createObjectStore('progress', { keyPath: 'id' });
+        p.createIndex('due', 'due');
+        d.createObjectStore('days', { keyPath: 'date' });
+        d.createObjectStore('kv');
+      },
+      // the browser closed the connection (iOS does this to apps left in the background)
+      terminated() {
+        if (dbp === opening) dbp = null;
+      },
+    });
+    opening.catch(() => {
+      if (dbp === opening) dbp = null;
+    });
+    dbp = opening;
+  }
   return dbp;
 }
 
+/**
+ * Safari on iPhone sometimes drops the database connection of an app that sat in the
+ * background ("Connection to Indexed Database server lost"), and every later request on
+ * it fails. Recognise that and reconnect.
+ */
+export function isConnectionLost(e: unknown): boolean {
+  const err = e as { name?: string; message?: string } | null;
+  if (!err) return false;
+  return (
+    err.name === 'UnknownError' ||
+    err.name === 'InvalidStateError' ||
+    /connection|server lost|closing|closed/i.test(err.message ?? '')
+  );
+}
+
+/** Run a database operation; if the connection was lost, reopen it and try once more. */
+async function withDb<T>(fn: (d: IDBPDatabase<LueckeDB>) => Promise<T>): Promise<T> {
+  const first = await db();
+  try {
+    return await fn(first);
+  } catch (e) {
+    if (!isConnectionLost(e)) throw e;
+    if (dbp && (await dbp.catch(() => null)) === first) dbp = null;
+    try {
+      first.close();
+    } catch {
+      /* already closed */
+    }
+    return fn(await db());
+  }
+}
+
 export async function getKv<T>(key: string): Promise<T | undefined> {
-  return (await (await db()).get('kv', key)) as T | undefined;
+  return (await withDb((d) => d.get('kv', key))) as T | undefined;
 }
 
 export async function setKv(key: string, value: unknown): Promise<void> {
-  await (await db()).put('kv', value, key);
+  await withDb((d) => d.put('kv', value, key));
 }
 
 export async function delKv(key: string): Promise<void> {
-  await (await db()).delete('kv', key);
+  await withDb((d) => d.delete('kv', key));
 }
 
 /** A random id for this browser, used to keep each device's daily stats apart when syncing. */
@@ -73,44 +115,47 @@ export async function deviceId(): Promise<string> {
 }
 
 export async function loadAll(): Promise<LocalData> {
-  const d = await db();
-  const [progress, days, settings, otherDays, settingsUpdated, resetAt] = await Promise.all([
-    d.getAll('progress'),
-    d.getAll('days'),
-    d.get('kv', 'settings') as Promise<Partial<Settings> | undefined>,
-    d.get('kv', 'otherDays') as Promise<Record<string, DayStat[]> | undefined>,
-    d.get('kv', 'settingsUpdated') as Promise<number | undefined>,
-    d.get('kv', 'resetAt') as Promise<number | undefined>,
-  ]);
-  return {
-    progress,
-    days,
-    otherDays: otherDays ?? {},
-    settings: { ...DEFAULT_SETTINGS, ...(settings ?? {}) },
-    settingsUpdated: settingsUpdated ?? 0,
-    resetAt: resetAt ?? 0,
-  };
+  return withDb(async (d) => {
+    const [progress, days, settings, otherDays, settingsUpdated, resetAt] = await Promise.all([
+      d.getAll('progress'),
+      d.getAll('days'),
+      d.get('kv', 'settings') as Promise<Partial<Settings> | undefined>,
+      d.get('kv', 'otherDays') as Promise<Record<string, DayStat[]> | undefined>,
+      d.get('kv', 'settingsUpdated') as Promise<number | undefined>,
+      d.get('kv', 'resetAt') as Promise<number | undefined>,
+    ]);
+    return {
+      progress,
+      days,
+      otherDays: otherDays ?? {},
+      settings: { ...DEFAULT_SETTINGS, ...(settings ?? {}) },
+      settingsUpdated: settingsUpdated ?? 0,
+      resetAt: resetAt ?? 0,
+    };
+  });
 }
 
 /** Save one answer atomically: the sentence's progress and the day's stats. */
 export async function saveAnswer(p: Progress | null, day: DayStat): Promise<void> {
-  const d = await db();
-  const tx = d.transaction(['progress', 'days'], 'readwrite');
-  if (p) tx.objectStore('progress').put(p);
-  tx.objectStore('days').put(day);
-  await tx.done;
+  return withDb(async (d) => {
+    const tx = d.transaction(['progress', 'days'], 'readwrite');
+    if (p) tx.objectStore('progress').put(p);
+    tx.objectStore('days').put(day);
+    await tx.done;
+  });
 }
 
 export async function saveProgress(p: Progress): Promise<void> {
-  await (await db()).put('progress', p);
+  await withDb((d) => d.put('progress', p));
 }
 
 export async function saveSettings(s: Settings, updated = Date.now()): Promise<void> {
-  const d = await db();
-  const tx = d.transaction('kv', 'readwrite');
-  tx.store.put(s, 'settings');
-  tx.store.put(updated, 'settingsUpdated');
-  await tx.done;
+  return withDb(async (d) => {
+    const tx = d.transaction('kv', 'readwrite');
+    tx.store.put(s, 'settings');
+    tx.store.put(updated, 'settingsUpdated');
+    await tx.done;
+  });
 }
 
 /**
@@ -118,29 +163,30 @@ export async function saveSettings(s: Settings, updated = Date.now()): Promise<v
  * device while the sync was running.
  */
 export async function applySync(r: SyncResult): Promise<void> {
-  const d = await db();
-  const tx = d.transaction(['progress', 'days', 'kv'], 'readwrite');
-  const progress = tx.objectStore('progress');
-  for (const id of r.progressDelete) {
-    const cur = await progress.get(id);
-    if (cur && cur.last < r.resetAt) await progress.delete(id);
-  }
-  for (const p of r.progressPut) {
-    const cur = await progress.get(p.id);
-    if (!cur || !newer(cur, p)) await progress.put(p);
-  }
-  if (r.ownDays) {
-    await tx.objectStore('days').clear();
-    for (const day of r.ownDays) await tx.objectStore('days').put(day);
-  }
-  const kv = tx.objectStore('kv');
-  await kv.put(r.otherDays, 'otherDays');
-  await kv.put(r.resetAt, 'resetAt');
-  if (r.settings) {
-    await kv.put({ ...DEFAULT_SETTINGS, ...r.settings.value }, 'settings');
-    await kv.put(r.settings.updated, 'settingsUpdated');
-  }
-  await tx.done;
+  return withDb(async (d) => {
+    const tx = d.transaction(['progress', 'days', 'kv'], 'readwrite');
+    const progress = tx.objectStore('progress');
+    for (const id of r.progressDelete) {
+      const cur = await progress.get(id);
+      if (cur && cur.last < r.resetAt) await progress.delete(id);
+    }
+    for (const p of r.progressPut) {
+      const cur = await progress.get(p.id);
+      if (!cur || !newer(cur, p)) await progress.put(p);
+    }
+    if (r.ownDays) {
+      await tx.objectStore('days').clear();
+      for (const day of r.ownDays) await tx.objectStore('days').put(day);
+    }
+    const kv = tx.objectStore('kv');
+    await kv.put(r.otherDays, 'otherDays');
+    await kv.put(r.resetAt, 'resetAt');
+    if (r.settings) {
+      await kv.put({ ...DEFAULT_SETTINGS, ...r.settings.value }, 'settings');
+      await kv.put(r.settings.updated, 'settingsUpdated');
+    }
+    await tx.done;
+  });
 }
 
 export async function exportBackup(): Promise<Backup> {
@@ -164,28 +210,30 @@ export function validateBackup(x: unknown): Backup {
 /** Replace all data on this device with the backup's contents. */
 export async function importBackup(raw: unknown): Promise<void> {
   const b = validateBackup(raw);
-  const d = await db();
-  const tx = d.transaction(['progress', 'days', 'kv'], 'readwrite');
-  await Promise.all([tx.objectStore('progress').clear(), tx.objectStore('days').clear()]);
-  for (const p of b.progress) tx.objectStore('progress').put(p);
-  for (const day of b.days) tx.objectStore('days').put(day);
-  tx.objectStore('kv').put({ ...DEFAULT_SETTINGS, ...b.settings }, 'settings');
-  tx.objectStore('kv').put(Date.now(), 'settingsUpdated');
-  tx.objectStore('kv').put(b.otherDays ?? {}, 'otherDays');
-  await tx.done;
+  return withDb(async (d) => {
+    const tx = d.transaction(['progress', 'days', 'kv'], 'readwrite');
+    await Promise.all([tx.objectStore('progress').clear(), tx.objectStore('days').clear()]);
+    for (const p of b.progress) tx.objectStore('progress').put(p);
+    for (const day of b.days) tx.objectStore('days').put(day);
+    tx.objectStore('kv').put({ ...DEFAULT_SETTINGS, ...b.settings }, 'settings');
+    tx.objectStore('kv').put(Date.now(), 'settingsUpdated');
+    tx.objectStore('kv').put(b.otherDays ?? {}, 'otherDays');
+    await tx.done;
+  });
 }
 
 /** Delete all progress, points and streaks. With sync on, the reset reaches every device. */
 export async function resetProgress(): Promise<void> {
-  const d = await db();
-  const tx = d.transaction(['progress', 'days', 'kv'], 'readwrite');
-  await Promise.all([
-    tx.objectStore('progress').clear(),
-    tx.objectStore('days').clear(),
-    tx.objectStore('kv').put({}, 'otherDays'),
-    tx.objectStore('kv').put(Date.now(), 'resetAt'),
-    tx.done,
-  ]);
+  return withDb(async (d) => {
+    const tx = d.transaction(['progress', 'days', 'kv'], 'readwrite');
+    await Promise.all([
+      tx.objectStore('progress').clear(),
+      tx.objectStore('days').clear(),
+      tx.objectStore('kv').put({}, 'otherDays'),
+      tx.objectStore('kv').put(Date.now(), 'resetAt'),
+      tx.done,
+    ]);
+  });
 }
 
 /**
@@ -194,19 +242,20 @@ export async function resetProgress(): Promise<void> {
  * Returns how many records changed.
  */
 export async function migrateProgress(levelOf: Map<number, number>): Promise<number> {
-  const d = await db();
-  const tx = d.transaction('progress', 'readwrite');
-  let changed = 0;
-  for (const p of await tx.store.getAll()) {
-    const lv = levelOf.get(p.id);
-    if (lv === undefined) {
-      await tx.store.delete(p.id);
-      changed++;
-    } else if (lv !== p.lv) {
-      await tx.store.put({ ...p, lv });
-      changed++;
+  return withDb(async (d) => {
+    const tx = d.transaction('progress', 'readwrite');
+    let changed = 0;
+    for (const p of await tx.store.getAll()) {
+      const lv = levelOf.get(p.id);
+      if (lv === undefined) {
+        await tx.store.delete(p.id);
+        changed++;
+      } else if (lv !== p.lv) {
+        await tx.store.put({ ...p, lv });
+        changed++;
+      }
     }
-  }
-  await tx.done;
-  return changed;
+    await tx.done;
+    return changed;
+  });
 }

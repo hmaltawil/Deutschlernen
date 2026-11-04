@@ -23,6 +23,51 @@ function player(): HTMLAudioElement {
   return el;
 }
 
+/** A tenth of a second of silence (8 kHz, 8-bit WAV). */
+function silentWav(): string {
+  const n = 800;
+  const buf = new ArrayBuffer(44 + n);
+  const v = new DataView(buf);
+  const str = (o: number, t: string) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF');
+  v.setUint32(4, 36 + n, true);
+  str(8, 'WAVEfmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true);
+  v.setUint32(28, 8000, true);
+  v.setUint16(32, 1, true);
+  v.setUint16(34, 8, true);
+  str(36, 'data');
+  v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+
+let unlocked = false;
+
+/**
+ * iPhone only lets a page start sound in response to a tap. Playing silence on the shared
+ * audio element during the first tap unlocks it, so later automatic playback (after an
+ * answer, or at the start of a listening card) is allowed.
+ */
+export function unlockAudio() {
+  if (unlocked) return;
+  unlocked = true;
+  const a = player();
+  if (a.src && !a.paused) return; // already playing something
+  const url = silentWav();
+  a.src = url;
+  a.play()
+    .then(() => {
+      if (a.src === url) a.pause();
+    })
+    .catch(() => {
+      unlocked = false; // try again on the next tap
+    });
+}
+
 /** A recording as a blob URL (from the saved bundle, else a byte range from the website). */
 function clip(item: Item): Promise<string> {
   const key = item.id;
