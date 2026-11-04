@@ -90,10 +90,10 @@ export function SyncSection({ joinCode }: { joinCode?: string }) {
 
   const on = s.state !== 'off';
   const statusText =
-    s.state === 'syncing'
-      ? 'Syncing…'
-      : s.state === 'offline' || !online
-        ? 'Offline — will sync when you’re back online'
+    s.state === 'offline' || !online
+      ? 'Offline — will sync when you’re back online'
+      : s.state === 'syncing'
+        ? 'Syncing…'
         : s.state === 'error'
           ? `Sync problem: ${s.error ?? 'unknown error'}`
           : `Synced ${ago(s.lastSync)}`;
@@ -157,7 +157,7 @@ export function SyncSection({ joinCode }: { joinCode?: string }) {
           <div className="field">
             <label>Status</label>
             <span className="small" style={{ fontWeight: 600 }} role="status">
-              {s.state === 'idle' && '✓ '}
+              {s.state === 'idle' && online && '✓ '}
               {statusText}
             </span>
           </div>

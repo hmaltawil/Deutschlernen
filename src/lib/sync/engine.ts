@@ -11,6 +11,7 @@ import { allChunkIds, syncOnce, type LocalState, type SyncResult } from './core'
 import { formatCode, generateCode, normalizeCode, syncIdFor } from './code';
 import { emulatorHost, firebaseConfig } from './config';
 import type { Remote } from './firestore';
+import { mark } from '../startup';
 
 interface SyncConfig {
   code: string;
@@ -40,6 +41,8 @@ let running: Promise<void> | null = null;
 let again = false;
 let soonTimer: ReturnType<typeof setTimeout> | undefined;
 let started = false;
+/** set once the user turns sync on/off in this session; the start-up load must not override it */
+let changedByUser = false;
 
 function set(p: Partial<SyncStatus>) {
   status = { ...status, ...p };
@@ -93,8 +96,11 @@ async function clearDirty(snapshot: Record<string, number>) {
 
 export async function initSync() {
   if (!firebaseConfig) return;
-  config = (await getKv<SyncConfig>('sync')) ?? null;
-  set(config ? { state: 'idle', code: config.code, lastSync: config.lastSync } : { state: 'off', code: undefined });
+  const stored = (await getKv<SyncConfig>('sync')) ?? null;
+  if (!changedByUser) {
+    config = stored;
+    set(config ? { state: 'idle', code: config.code, lastSync: config.lastSync } : { state: 'off', code: undefined });
+  }
   if (!started) {
     started = true;
     window.addEventListener('online', () => syncNow());
@@ -109,6 +115,7 @@ export async function initSync() {
 export async function startSync(existing?: string): Promise<string> {
   const code = existing ? normalizeCode(existing) : normalizeCode(generateCode());
   if (!code) throw new Error('That sync code is not valid. It has 24 letters and numbers.');
+  changedByUser = true;
   const levels = (await loadManifest()).levels.map((l) => l.n);
   config = { code: formatCode(code), syncId: await syncIdFor(code), lastSeen: {}, lastSync: 0 };
   await setKv('sync', config);
@@ -123,6 +130,7 @@ export async function startSync(existing?: string): Promise<string> {
 
 /** Stop syncing on this device (keeps local progress; the synced copy stays for other devices). */
 export async function stopSync() {
+  changedByUser = true;
   config = null;
   await delKv('sync');
   set({ state: 'off', code: undefined, lastSync: undefined, error: undefined });
@@ -178,6 +186,7 @@ export function syncNow(): Promise<void> {
       for (const h of appliedHooks) h(r);
     }
     set({ state: 'idle', lastSync: cfg.lastSync, error: undefined });
+    mark('sync');
   })()
     .catch((e: Error) => {
       set({ state: navigator.onLine ? 'error' : 'offline', error: e.message });

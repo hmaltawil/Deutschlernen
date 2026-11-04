@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { exportBackup, importBackup, resetProgress } from '../lib/db';
 import { piper, speakText } from '../lib/audio';
 import { DEFAULT_SETTINGS, VOICES, type Theme } from '../lib/settings';
@@ -8,13 +8,17 @@ import { IconDownload, IconVolume } from './Icons';
 import { useVoice } from './useVoice';
 import { VoiceBanner } from './VoiceBanner';
 import { useOffline } from './useOffline';
-import { removeSavedRecordings, saveAllRecordings, stopSavingRecordings } from '../lib/offline';
+import { refreshCounts, removeSavedRecordings, saveAllRecordings, stopSavingRecordings } from '../lib/offline';
 import { allChunkIds } from '../lib/sync/core';
 import { markDirty, syncNow } from '../lib/sync/engine';
 import { SyncSection, useSync } from './Sync';
+import { StartupTime } from './StartupTime';
 
 function OfflineSection() {
   const off = useOffline();
+  useEffect(() => {
+    refreshCounts();
+  }, []);
   const voice = useVoice();
   const { settings } = useStore();
   const voiceReady = voice.state === 'ready' && voice.voiceId === settings.voice;
@@ -317,6 +321,8 @@ export function SettingsPage({ joinCode }: { joinCode?: string }) {
           </p>
         )}
       </section>
+
+      <StartupTime />
 
       <p className="small muted center">
         <a href="#/credits">Credits &amp; licences</a>

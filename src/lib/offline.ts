@@ -1,6 +1,7 @@
 /** Offline mode: service worker registration, status, and saving recordings to the device. */
 import { registerSW } from 'virtual:pwa-register';
 import { audioUrl, loadLevel, loadManifest } from './deck';
+import { mark } from './startup';
 
 export type OfflineState = 'unsupported' | 'saving' | 'ready';
 
@@ -36,7 +37,10 @@ export function subscribeOffline(fn: (s: OfflineStatus) => void): () => void {
 
 async function deckIsCached(): Promise<boolean> {
   try {
-    return !!(await caches.match(`${base}deck/manifest.json`, { ignoreSearch: true }));
+    // look only in the app's own cache: searching every cache (incl. ~11k recordings) is slow on iPhone
+    const name = (await caches.keys()).find((n) => n.startsWith('workbox-precache'));
+    if (!name) return false;
+    return !!(await (await caches.open(name)).match(`${base}deck/manifest.json`, { ignoreSearch: true }));
   } catch {
     return false;
   }
@@ -52,9 +56,12 @@ export function initOffline() {
     immediate: true,
     onOfflineReady: () => set({ app: 'ready' }),
   });
-  deckIsCached().then((ok) => ok && set({ app: 'ready' }));
-  refreshCounts();
+  deckIsCached().then((ok) => {
+    if (ok) set({ app: 'ready' });
+    mark('offline');
+  });
   pruneOldVoiceRuntime();
+  // the saved-recordings count is only needed in Settings → Offline (refreshCounts)
 }
 
 /** All recording URLs in the deck. */

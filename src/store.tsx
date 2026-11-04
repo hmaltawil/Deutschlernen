@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS, type Settings } from './lib/settings';
 import { piper } from './lib/audio';
 import { newer, progressChunk, sumDays } from './lib/sync/core';
 import { initSync, markDirty, onSyncApplied } from './lib/sync/engine';
+import { afterFirstScreen, mark } from './lib/startup';
 
 export interface AnswerInput {
   item: Item;
@@ -60,21 +61,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const reload = useCallback(async () => {
     try {
-      const [m, data] = await Promise.all([loadManifest(), loadAll()]);
+      const [m, data] = await Promise.all([
+        loadManifest().then((x) => (mark('sentences'), x)),
+        loadAll().then((x) => (mark('progress'), x)),
+      ]);
       setManifest(m);
       setProgress(new Map(data.progress.map((p) => [p.id, p])));
       setOwnDays(new Map(data.days.map((d) => [d.date, d])));
       setOtherDays(data.otherDays);
       setSettings(data.settings);
       setReady(true);
-      piper.check(data.settings.voice);
+      // not needed for the first screen: check the voice once it is up
+      afterFirstScreen(() => piper.check(data.settings.voice).then(() => mark('voice')));
     } catch (e) {
       setError((e as Error).message);
     }
   }, []);
 
   useEffect(() => {
-    reload().then(() => initSync());
+    reload().then(() => afterFirstScreen(() => initSync(), 900));
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
   }, [reload]);

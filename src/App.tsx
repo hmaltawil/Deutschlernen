@@ -10,6 +10,8 @@ import type { RoundKind } from './lib/session';
 import { useRoute } from './router';
 import { useStore } from './store';
 import { useOnline } from './components/useOffline';
+import { useEffect } from 'react';
+import { mark } from './lib/startup';
 
 const NAV = [
   { to: '/', label: 'Home', icon: IconHome, match: (p: string) => p === '/' },
@@ -20,6 +22,9 @@ const NAV = [
 
 export function App() {
   const { ready, error } = useStore();
+  useEffect(() => {
+    if (ready) requestAnimationFrame(() => mark('screen'));
+  }, [ready]);
   const { path, params } = useRoute();
   const playing = path === '/play';
   const online = useOnline();
