@@ -6,10 +6,11 @@ A cloze-sentence trainer for German. You learn words by filling the gap in real 
 - **Three ways to answer:** multiple choice (4 pts), typing (8 pts) or listening (10 pts). A streak of correct answers adds up to +50%.
 - **Spaced repetition.** Each correct answer moves a sentence 25% → 50% → 75% → 100% and waits 1 / 7 / 30 / 120 days before the next review (you can change the intervals). A wrong answer resets it to 0% and asks it again at the end of the round.
 - **Natural audio, best source first:**
-  1. **Native-speaker recordings** for ~10,900 sentences. Copies are stored with the app in `public/audio/`, with tatoeba.org as a fallback.
+  1. **Native-speaker recordings** for ~10,900 sentences, stored with the app as one bundle per level (`public/audio/level-NN.pack`), with tatoeba.org as a fallback.
   2. **Neural German voice** for everything else. Piper runs on your device and is downloaded once (~63 MB). After that it works offline.
   3. The browser's own voice, used only if the neural voice isn't available.
-- **Works offline.** A service worker saves the app and all 30,000 sentences on the device (~6 MB). Recordings are saved as you hear them, or all at once from Settings → Offline (~150 MB). Without internet, recordings that aren't saved are read by the neural voice.
+- **Works offline.** A service worker saves the app and all 30,000 sentences on the device (~6 MB). A level's recordings are saved on the device when you start playing it (0.4–12 MB per level), or all at once from Settings → Offline (148 MB). Without internet, recordings of unsaved levels are read by the neural voice.
+  Recordings are kept as 30 bundles in the browser's private file system rather than ~11,000 separate cache entries: with that many entries Safari on iPhone took ~10 s to open the app (0.2 s with bundles).
 - **Stats:** points per day, mastery breakdown, upcoming reviews, progress per level.
 - **Sync between devices (optional).** Settings → Sync gives one device a secret 24-character sync code (with a QR code). Enter it on other devices and progress, points, streaks and settings stay in step. No account is needed; data is stored in Firebase Firestore under the SHA-256 of the code. Each sentence keeps its most recent answer, each device's points add up, and everything keeps working offline and syncs when you reconnect.
 - **Your data stays on your device** (IndexedDB). Settings has export/import for backups.
@@ -42,7 +43,7 @@ npm test
 python3 scripts/build_deck.py            # options: --target 30000 --per-word-audio 8
 ```
 
-Then copy the recordings (~150 MB, about 15 minutes; files you already have are skipped):
+Then download the recordings (~150 MB into `data/audio/`, about 15 minutes; files you already have are skipped) and rebuild the level bundles:
 
 ```bash
 python3 scripts/fetch_audio.py
@@ -67,14 +68,16 @@ npm run test:rules
 | Path | What |
 |---|---|
 | `scripts/build_deck.py` | Deck builder: frequency ranking, cloze choice, distractors, levels |
-| `scripts/fetch_audio.py` | Copies the deck's recordings from Tatoeba into `public/audio/` |
+| `scripts/fetch_audio.py` | Downloads the deck's recordings from Tatoeba and packs them into per-level bundles |
 | `scripts/copy-tts-assets.mjs` | Copies the ONNX Runtime + Piper phonemizer WASM into `public/tts/` (runs automatically) |
 | `src/lib/srs.ts` | Spaced-repetition scheduling |
 | `src/lib/session.ts` | Builds rounds (due reviews first, then new sentences by level) |
 | `src/lib/answer.ts` | Answer checking (case-insensitive; accepts ae/oe/ue/ss) |
 | `src/lib/scoring.ts` | Points, daily stats, streaks |
 | `src/lib/db.ts` | IndexedDB storage, backup export/import |
-| `src/lib/offline.ts` + `vite.config.ts` (VitePWA) | Service worker, offline status, saving recordings |
+| `src/lib/offline.ts` + `vite.config.ts` (VitePWA) | Service worker, offline status, saving recording bundles |
+| `src/lib/audio/recordings.ts` + `src/workers/recordings.worker.ts` | Reading recordings from bundles (device or byte ranges), saving bundles to the device |
+| `src/lib/startup.ts` | Startup timing (Settings → Startup time) |
 | `src/lib/sync/` | Sync: codes (`code.ts`), merge logic (`core.ts`), Firestore (`firestore.ts`), scheduling (`engine.ts`) |
 | `firestore.rules`, `tests/` | Security rules and their emulator tests |
 | `src/lib/audio/` + `src/workers/piper.worker.ts` | Audio sources: recording → neural voice → system voice |

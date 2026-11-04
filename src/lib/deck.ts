@@ -19,6 +19,8 @@ export interface Item {
   r: number;
   /** native-speaker recording: [audioId, speaker, licence] */
   au?: [number, string, AudioLicense];
+  /** where the recording sits in its level bundle (audio/level-NN.pack): [offset, length] */
+  ap?: [number, number];
   /** deck level this item belongs to (added on load) */
   lv: number;
 }
@@ -30,6 +32,9 @@ export interface LevelInfo {
   audio: number;
   minRank: number;
   maxRank: number;
+  /** bundle of this level's recordings, and its size */
+  pack?: string;
+  packBytes?: number;
 }
 
 export interface Manifest {
@@ -87,9 +92,13 @@ export async function getItems(refs: { id: number; lv: number }[]): Promise<Item
   return refs.map((r) => byId.get(r.id)).filter((x): x is Item => !!x);
 }
 
-/** Recording copied into this app (public/audio), cached for offline use by the service worker. */
-export function audioUrl(au: NonNullable<Item['au']>): string {
-  return `${base}audio/${au[0]}.mp3`;
+/** The level's recording bundle on the website. */
+export function packName(lv: number): string {
+  return `level-${String(lv).padStart(2, '0')}.pack`;
+}
+
+export function packUrl(lv: number): string {
+  return `${base}audio/${packName(lv)}`;
 }
 
 /** The original on tatoeba.org — fallback if the local copy is missing. */

@@ -13,6 +13,8 @@ export interface Settings {
   voice: string;
   intervals: number[];
   theme: Theme;
+  /** download a level's recording bundle when you start playing it */
+  autoSaveRecordings: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -25,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   voice: 'de_DE-thorsten-medium',
   intervals: [...DEFAULT_INTERVALS],
   theme: 'system',
+  autoSaveRecordings: true,
 };
 
 export interface VoiceOption {

@@ -1,28 +1,38 @@
-/** Offline mode: service worker registration, status, and saving recordings to the device. */
+/** Offline mode: service worker registration, status, and saving recording bundles to the device. */
 import { registerSW } from 'virtual:pwa-register';
-import { audioUrl, loadLevel, loadManifest } from './deck';
+import { loadManifest } from './deck';
 import { mark } from './startup';
+import { opfsSupported, removeBundles, saveBundle, savedLevels } from './audio/recordings';
 
 export type OfflineState = 'unsupported' | 'saving' | 'ready';
 
 export interface OfflineStatus {
   app: OfflineState;
-  /** recordings stored on this device */
-  saved: number;
-  /** recordings in the deck */
-  total: number;
-  /** size of all recordings in bytes */
-  bytes: number;
-  /** progress of "save all recordings" (null when idle) */
+  /** levels whose recordings are saved on this device */
+  savedLevels: number;
+  totalLevels: number;
+  savedBytes: number;
+  totalBytes: number;
+  /** progress of "save all recordings" in bytes (null when idle) */
   job: { done: number; todo: number } | null;
+  /** level being saved in the background (auto-save), if any */
+  background: number | null;
   error?: string;
 }
 
-const RECORDINGS_CACHE = 'recordings';
 const base = import.meta.env.BASE_URL;
-let status: OfflineStatus = { app: 'saving', saved: 0, total: 0, bytes: 0, job: null };
+let status: OfflineStatus = {
+  app: 'saving',
+  savedLevels: 0,
+  totalLevels: 0,
+  savedBytes: 0,
+  totalBytes: 0,
+  job: null,
+  background: null,
+};
 const listeners = new Set<(s: OfflineStatus) => void>();
 let cancelJob = false;
+let busy: Promise<unknown> = Promise.resolve(); // one bundle download at a time
 
 function set(p: Partial<OfflineStatus>) {
   status = { ...status, ...p };
@@ -37,7 +47,7 @@ export function subscribeOffline(fn: (s: OfflineStatus) => void): () => void {
 
 async function deckIsCached(): Promise<boolean> {
   try {
-    // look only in the app's own cache: searching every cache (incl. ~11k recordings) is slow on iPhone
+    // look only in the app's own cache
     const name = (await caches.keys()).find((n) => n.startsWith('workbox-precache'));
     if (!name) return false;
     return !!(await (await caches.open(name)).match(`${base}deck/manifest.json`, { ignoreSearch: true }));
@@ -61,70 +71,93 @@ export function initOffline() {
     mark('offline');
   });
   pruneOldVoiceRuntime();
-  // the saved-recordings count is only needed in Settings → Offline (refreshCounts)
+  dropPerRecordingCache();
 }
 
-/** All recording URLs in the deck. */
-async function recordingUrls(): Promise<string[]> {
+async function bundleSizes(): Promise<Map<number, number>> {
   const m = await loadManifest();
-  const levels = await Promise.all(m.levels.map((l) => loadLevel(l.n)));
-  return levels.flat().flatMap((it) => (it.au ? [audioUrl(it.au)] : []));
+  return new Map(m.levels.filter((l) => l.packBytes).map((l) => [l.n, l.packBytes!]));
 }
 
 export async function refreshCounts(): Promise<void> {
-  if (!('caches' in window)) return;
   try {
-    const m = await loadManifest();
-    const cache = await caches.open(RECORDINGS_CACHE);
-    const keys = await cache.keys();
-    set({ saved: keys.length, total: m.audio, bytes: m.audioBytes ?? m.audio * 14000 });
+    const sizes = await bundleSizes();
+    const saved = await savedLevels(sizes);
+    let savedBytes = 0;
+    for (const b of saved.values()) savedBytes += b;
+    let totalBytes = 0;
+    for (const b of sizes.values()) totalBytes += b;
+    set({ savedLevels: saved.size, totalLevels: sizes.size, savedBytes, totalBytes });
   } catch {
     /* ignore */
   }
 }
 
-/** Download every recording into the offline cache (resumable; already-saved ones are skipped). */
+/** Download every level's recordings (already saved levels are skipped). */
 export async function saveAllRecordings(): Promise<void> {
-  if (status.job) return;
+  if (status.job || !opfsSupported()) return;
   cancelJob = false;
   navigator.storage?.persist?.().catch(() => {});
+  set({ job: { done: 0, todo: 0 }, error: undefined });
   try {
-    const cache = await caches.open(RECORDINGS_CACHE);
-    const have = new Set((await cache.keys()).map((r) => new URL(r.url).pathname));
-    const todo = (await recordingUrls()).filter((u) => !have.has(new URL(u, location.href).pathname));
+    await busy; // let a background save finish first
+    const sizes = await bundleSizes();
+    const saved = await savedLevels(sizes);
+    const todo = [...sizes].filter(([lv]) => !saved.has(lv));
+    const total = todo.reduce((s, [, b]) => s + b, 0);
     let done = 0;
-    set({ job: { done, todo: todo.length }, error: undefined });
-    let next = 0;
-    const worker = async () => {
-      while (!cancelJob && next < todo.length) {
-        const url = todo[next++];
-        try {
-          const res = await fetch(url);
-          // only keep real audio (a misconfigured server may answer missing files with a web page)
-          if (res.ok && (res.headers.get('content-type') ?? '').startsWith('audio/')) await cache.put(url, res);
-        } catch {
-          if (!navigator.onLine) cancelJob = true;
-        }
-        done++;
-        if (done % 25 === 0 || done === todo.length) set({ job: { done, todo: todo.length }, saved: have.size + done });
+    set({ job: { done, todo: total } });
+    for (const [lv, size] of todo) {
+      if (cancelJob) break;
+      if (!navigator.onLine) {
+        set({ error: 'Stopped: no internet connection. Tap again to continue.' });
+        break;
       }
-    };
-    await Promise.all(Array.from({ length: 6 }, worker));
-    if (cancelJob && !navigator.onLine) set({ error: 'Stopped: no internet connection. Tap again to continue.' });
+      await saveBundle(lv, size, (d) => set({ job: { done: done + d, todo: total } }));
+      done += size;
+      set({ job: { done, todo: total } });
+      await refreshCounts();
+    }
   } catch (e) {
-    set({ error: (e as Error).message });
+    set({ error: navigator.onLine ? (e as Error).message : 'Stopped: no internet connection. Tap again to continue.' });
   } finally {
     set({ job: null });
     await refreshCounts();
   }
 }
 
+/** Stop "save all" after the level that is downloading now. */
 export function stopSavingRecordings() {
   cancelJob = true;
 }
 
+const tried = new Set<number>();
+
+/** Save a level's recordings in the background (used when you start playing that level). */
+export function ensureLevelSaved(lv: number) {
+  if (!opfsSupported() || !navigator.onLine || status.job || tried.has(lv)) return;
+  tried.add(lv);
+  busy = busy.then(async () => {
+    try {
+      const size = (await bundleSizes()).get(lv);
+      if (!size) return;
+      if ((await savedLevels(new Map([[lv, size]]))).has(lv)) return;
+      set({ background: lv });
+      await saveBundle(lv, size);
+      navigator.storage?.persist?.().catch(() => {});
+    } catch {
+      tried.delete(lv); // try again another time
+    } finally {
+      set({ background: null });
+      refreshCounts();
+    }
+  });
+}
+
 export async function removeSavedRecordings(): Promise<void> {
-  await caches.delete(RECORDINGS_CACHE);
+  await busy;
+  await removeBundles();
+  tried.clear();
   await refreshCounts();
 }
 
@@ -135,6 +168,19 @@ async function pruneOldVoiceRuntime() {
     for (const req of await cache.keys()) {
       if (!new URL(req.url).pathname.includes(`/tts/${__TTS_VERSION__}/`)) await cache.delete(req);
     }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Older versions kept every recording as its own cache entry (up to ~11,000),
+ * which made the app take ~10 s to open on iPhone. Remove that cache once.
+ */
+async function dropPerRecordingCache() {
+  try {
+    if ((await caches.keys()).includes('recordings')) await caches.delete('recordings');
+    indexedDB.deleteDatabase('workbox-expiration');
   } catch {
     /* ignore */
   }

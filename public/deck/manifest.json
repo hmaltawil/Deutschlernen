@@ -12,7 +12,9 @@
    "count": 1000,
    "audio": 783,
    "minRank": 1,
-   "maxRank": 385
+   "maxRank": 385,
+   "pack": "level-01.pack",
+   "packBytes": 10096386
   },
   {
    "n": 2,
@@ -20,7 +22,9 @@
    "count": 1000,
    "audio": 871,
    "minRank": 39,
-   "maxRank": 669
+   "maxRank": 669,
+   "pack": "level-02.pack",
+   "packBytes": 11748021
   },
   {
    "n": 3,
@@ -28,7 +32,9 @@
    "count": 1000,
    "audio": 850,
    "minRank": 142,
-   "maxRank": 944
+   "maxRank": 944,
+   "pack": "level-03.pack",
+   "packBytes": 11380868
   },
   {
    "n": 4,
@@ -36,7 +42,9 @@
    "count": 1000,
    "audio": 815,
    "minRank": 242,
-   "maxRank": 1232
+   "maxRank": 1232,
+   "pack": "level-04.pack",
+   "packBytes": 10810617
   },
   {
    "n": 5,
@@ -44,7 +52,9 @@
    "count": 1000,
    "audio": 772,
    "minRank": 347,
-   "maxRank": 1531
+   "maxRank": 1531,
+   "pack": "level-05.pack",
+   "packBytes": 11217828
   },
   {
    "n": 6,
@@ -52,7 +62,9 @@
    "count": 1000,
    "audio": 711,
    "minRank": 456,
-   "maxRank": 1832
+   "maxRank": 1832,
+   "pack": "level-06.pack",
+   "packBytes": 9730164
   },
   {
    "n": 7,
@@ -60,7 +72,9 @@
    "count": 1000,
    "audio": 669,
    "minRank": 565,
-   "maxRank": 2143
+   "maxRank": 2143,
+   "pack": "level-07.pack",
+   "packBytes": 9310605
   },
   {
    "n": 8,
@@ -68,7 +82,9 @@
    "count": 1000,
    "audio": 622,
    "minRank": 681,
-   "maxRank": 2467
+   "maxRank": 2467,
+   "pack": "level-08.pack",
+   "packBytes": 8199763
   },
   {
    "n": 9,
@@ -76,7 +92,9 @@
    "count": 1000,
    "audio": 552,
    "minRank": 796,
-   "maxRank": 2802
+   "maxRank": 2802,
+   "pack": "level-09.pack",
+   "packBytes": 7636896
   },
   {
    "n": 10,
@@ -84,7 +102,9 @@
    "count": 1000,
    "audio": 498,
    "minRank": 921,
-   "maxRank": 3155
+   "maxRank": 3155,
+   "pack": "level-10.pack",
+   "packBytes": 6870852
   },
   {
    "n": 11,
@@ -92,7 +112,9 @@
    "count": 1000,
    "audio": 453,
    "minRank": 1060,
-   "maxRank": 3515
+   "maxRank": 3515,
+   "pack": "level-11.pack",
+   "packBytes": 6036320
   },
   {
    "n": 12,
@@ -100,7 +122,9 @@
    "count": 1000,
    "audio": 404,
    "minRank": 1192,
-   "maxRank": 3893
+   "maxRank": 3893,
+   "pack": "level-12.pack",
+   "packBytes": 5291253
   },
   {
    "n": 13,
@@ -108,7 +132,9 @@
    "count": 1000,
    "audio": 360,
    "minRank": 1314,
-   "maxRank": 4267
+   "maxRank": 4267,
+   "pack": "level-13.pack",
+   "packBytes": 4860355
   },
   {
    "n": 14,
@@ -116,7 +142,9 @@
    "count": 1000,
    "audio": 326,
    "minRank": 1477,
-   "maxRank": 4651
+   "maxRank": 4651,
+   "pack": "level-14.pack",
+   "packBytes": 4304277
   },
   {
    "n": 15,
@@ -124,7 +152,9 @@
    "count": 1000,
    "audio": 277,
    "minRank": 1592,
-   "maxRank": 5038
+   "maxRank": 5038,
+   "pack": "level-15.pack",
+   "packBytes": 3793445
   },
   {
    "n": 16,
@@ -132,7 +162,9 @@
    "count": 1000,
    "audio": 258,
    "minRank": 1740,
-   "maxRank": 5434
+   "maxRank": 5434,
+   "pack": "level-16.pack",
+   "packBytes": 3237680
   },
   {
    "n": 17,
@@ -140,7 +172,9 @@
    "count": 1000,
    "audio": 239,
    "minRank": 1923,
-   "maxRank": 5835
+   "maxRank": 5835,
+   "pack": "level-17.pack",
+   "packBytes": 3487530
   },
   {
    "n": 18,
@@ -148,7 +182,9 @@
    "count": 1000,
    "audio": 213,
    "minRank": 2025,
-   "maxRank": 6237
+   "maxRank": 6237,
+   "pack": "level-18.pack",
+   "packBytes": 3081211
   },
   {
    "n": 19,
@@ -156,7 +192,9 @@
    "count": 1000,
    "audio": 186,
    "minRank": 2194,
-   "maxRank": 6650
+   "maxRank": 6650,
+   "pack": "level-19.pack",
+   "packBytes": 2725558
   },
   {
    "n": 20,
@@ -164,7 +202,9 @@
    "count": 1000,
    "audio": 180,
    "minRank": 2405,
-   "maxRank": 7062
+   "maxRank": 7062,
+   "pack": "level-20.pack",
+   "packBytes": 2520055
   },
   {
    "n": 21,
@@ -172,7 +212,9 @@
    "count": 1000,
    "audio": 145,
    "minRank": 2540,
-   "maxRank": 7482
+   "maxRank": 7482,
+   "pack": "level-21.pack",
+   "packBytes": 1876972
   },
   {
    "n": 22,
@@ -180,7 +222,9 @@
    "count": 1000,
    "audio": 137,
    "minRank": 2632,
-   "maxRank": 7898
+   "maxRank": 7898,
+   "pack": "level-22.pack",
+   "packBytes": 1761406
   },
   {
    "n": 23,
@@ -188,7 +232,9 @@
    "count": 1000,
    "audio": 127,
    "minRank": 2774,
-   "maxRank": 8324
+   "maxRank": 8324,
+   "pack": "level-23.pack",
+   "packBytes": 1568378
   },
   {
    "n": 24,
@@ -196,7 +242,9 @@
    "count": 1000,
    "audio": 112,
    "minRank": 3010,
-   "maxRank": 8752
+   "maxRank": 8752,
+   "pack": "level-24.pack",
+   "packBytes": 1517143
   },
   {
    "n": 25,
@@ -204,7 +252,9 @@
    "count": 1000,
    "audio": 111,
    "minRank": 3197,
-   "maxRank": 9183
+   "maxRank": 9183,
+   "pack": "level-25.pack",
+   "packBytes": 1577140
   },
   {
    "n": 26,
@@ -212,7 +262,9 @@
    "count": 1000,
    "audio": 78,
    "minRank": 3337,
-   "maxRank": 9342
+   "maxRank": 9342,
+   "pack": "level-26.pack",
+   "packBytes": 920770
   },
   {
    "n": 27,
@@ -220,7 +272,9 @@
    "count": 1000,
    "audio": 51,
    "minRank": 3525,
-   "maxRank": 8397
+   "maxRank": 8397,
+   "pack": "level-27.pack",
+   "packBytes": 522972
   },
   {
    "n": 28,
@@ -228,7 +282,9 @@
    "count": 1000,
    "audio": 49,
    "minRank": 4135,
-   "maxRank": 8989
+   "maxRank": 8989,
+   "pack": "level-28.pack",
+   "packBytes": 589591
   },
   {
    "n": 29,
@@ -236,7 +292,9 @@
    "count": 1000,
    "audio": 34,
    "minRank": 4135,
-   "maxRank": 9340
+   "maxRank": 9340,
+   "pack": "level-29.pack",
+   "packBytes": 423550
   },
   {
    "n": 30,
@@ -244,7 +302,9 @@
    "count": 1000,
    "audio": 40,
    "minRank": 5546,
-   "maxRank": 9340
+   "maxRank": 9340,
+   "pack": "level-30.pack",
+   "packBytes": 408685
   }
  ],
  "credits": {

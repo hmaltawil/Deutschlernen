@@ -31,6 +31,7 @@ export default defineConfig({
       },
       workbox: {
         // App shell + all 30 sentence levels are saved on install (~6 MB).
+        // Recordings are not cached here: they are saved per level as bundles (src/lib/audio/recordings.ts).
         globPatterns: ['**/*.{js,css,html,svg,png,json,webmanifest}'],
         globIgnores: ['tts/**', 'audio/**'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
@@ -45,17 +46,6 @@ export default defineConfig({
             urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.includes('/tts/'),
             handler: 'CacheFirst',
             options: { cacheName: 'tts-runtime', cacheableResponse: { statuses: [200] } },
-          },
-          {
-            // Native-speaker recordings: cached as they are played (or all at once from Settings).
-            urlPattern: ({ url, sameOrigin }) => sameOrigin && /\/audio\/\d+\.mp3$/.test(url.pathname),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'recordings',
-              // GitHub Pages sends audio/mp3, other servers audio/mpeg; a non-audio answer is purged by the player
-              cacheableResponse: { statuses: [200] },
-              expiration: { maxEntries: 20000 },
-            },
           },
         ],
       },

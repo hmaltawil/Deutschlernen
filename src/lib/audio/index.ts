@@ -1,13 +1,12 @@
 /**
  * Audio, most natural source first:
- *   1. native-speaker recording (copy stored with the app; tatoeba.org as fallback)
+ *   1. native-speaker recording (from the level bundle — saved on the device or
+ *      read from the website; tatoeba.org as a last fallback)
  *   2. on-device neural voice (Piper)
  *   3. browser speech synthesis (only if the neural voice is unavailable)
- *
- * Recordings are fetched with fetch() and played from a blob, so the service
- * worker can cache them (no media Range requests) and they work offline.
  */
-import { audioUrl, remoteAudioUrl, type Item } from '../deck';
+import { loadManifest, remoteAudioUrl, type Item } from '../deck';
+import { recordingBlob } from './recordings';
 import { piper } from './piper';
 import { speakSystem, stopSystem } from './webspeech';
 
@@ -15,35 +14,35 @@ export type Source = 'human' | 'neural' | 'system';
 
 let el: HTMLAudioElement | null = null;
 let playToken = 0;
-const clips = new Map<string, Promise<string>>(); // recording URL → object URL
+const clips = new Map<number, Promise<string>>(); // sentence id → object URL
 const CLIP_MAX = 30;
+let bundleSizes: Promise<Map<number, number>> | null = null;
+const sizeOf = async (lv: number) => {
+  bundleSizes ??= loadManifest().then((m) => new Map(m.levels.map((l) => [l.n, l.packBytes ?? 0])));
+  return (await bundleSizes).get(lv);
+};
 
 function player(): HTMLAudioElement {
   el ??= new Audio();
   return el;
 }
 
-/** Fetch a recording (through the service worker cache) and return a blob URL. */
-function clip(url: string): Promise<string> {
-  const hit = clips.get(url);
+/** A recording as a blob URL (from the saved bundle, else a byte range from the website). */
+function clip(item: Item): Promise<string> {
+  const key = item.id;
+  const hit = clips.get(key);
   if (hit) {
-    clips.delete(url);
-    clips.set(url, hit);
+    clips.delete(key);
+    clips.set(key, hit);
     return hit;
   }
-  const p = fetch(url).then(async (r) => {
-    if (r.ok && !(r.headers.get('content-type') ?? '').startsWith('audio/')) {
-      // a server answered with something else (e.g. a web page): don't keep it in the offline cache
-      caches?.open('recordings').then((c) => c.delete(url)).catch(() => {});
-      throw new Error('recording unavailable');
-    }
-    if (!r.ok) throw new Error(`recording unavailable (${r.status})`);
-    return URL.createObjectURL(await r.blob());
-  });
-  p.catch(() => clips.delete(url));
-  clips.set(url, p);
+  const p = sizeOf(item.lv)
+    .then((size) => recordingBlob(item, size))
+    .then((b) => URL.createObjectURL(b));
+  p.catch(() => clips.delete(key));
+  clips.set(key, p);
   while (clips.size > CLIP_MAX) {
-    const [k, v] = clips.entries().next().value as [string, Promise<string>];
+    const [k, v] = clips.entries().next().value as [number, Promise<string>];
     clips.delete(k);
     v.then((u) => URL.revokeObjectURL(u)).catch(() => {});
   }
@@ -79,7 +78,8 @@ type OnSource = (s: Source) => void;
 async function playHuman(item: Item, rate: number, token: number, onSource?: OnSource): Promise<boolean> {
   if (!item.au) return false;
   try {
-    const url = await clip(audioUrl(item.au));
+    if (!item.ap) throw new Error('no bundled copy');
+    const url = await clip(item);
     if (token !== playToken) return true;
     await playUrl(url, rate, token, () => onSource?.('human'));
     return true;
@@ -131,7 +131,7 @@ export function stop() {
 
 /** Warm up the next card's audio so it starts instantly (and is cached for offline use). */
 export function preload(item: Item, voice: string) {
-  if (item.au) clip(audioUrl(item.au)).catch(() => {});
+  if (item.au && item.ap) clip(item).catch(() => {});
   else if (piper.status.state === 'ready' && piper.status.voiceId === voice) piper.synth(item.de, voice).catch(() => {});
 }
 

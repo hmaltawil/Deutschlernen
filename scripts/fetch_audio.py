@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Copy the deck's native-speaker recordings from Tatoeba into public/audio/.
+"""Copy the deck's native-speaker recordings from Tatoeba and pack them per level.
 
-Each recording is saved as public/audio/<audioId>.mp3 so the app can serve it
-from its own site (and cache it for offline use). Licences (CC BY / CC BY-NC)
-allow redistribution with attribution; speaker and licence stay in the deck.
+1. Downloads each recording to data/audio/<audioId>.mp3 (local cache, not published).
+2. Writes one bundle per level, public/audio/level-NN.pack (the MP3s back to back),
+   and stores each recording's [offset, length] in the deck as `ap`.
+
+Thirty bundles instead of ~11,000 files keeps offline storage fast to open on
+iPhones (Safari slows down a lot with thousands of stored items). The app reads a
+recording with a byte-range request, or from the bundle saved on the device.
+Licences (CC BY / CC BY-NC) allow redistribution with attribution; speaker and
+licence stay in the deck.
 
 Run after build_deck.py:  python3 scripts/fetch_audio.py [--workers 6]
 Already-downloaded files are skipped, so it is safe to re-run.
@@ -22,7 +28,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DECK = ROOT / "public" / "deck"
-OUT = ROOT / "public" / "audio"
+OUT = ROOT / "data" / "audio"
+PACKS = ROOT / "public" / "audio"
 # Static file host (fast, parallel-friendly): one file per sentence, its first recording.
 STATIC_URL = "https://audio.tatoeba.org/sentences/deu/{}.mp3"
 # Per-recording endpoint (rate-limited): used when a sentence has several recordings,
@@ -60,6 +67,38 @@ def fetch(audio_id: int, url: str) -> tuple[int, str]:
     return audio_id, "failed"
 
 
+def build_packs(manifest: dict) -> None:
+    """One bundle per level; each item with a recording gets ap = [offset, length]."""
+    PACKS.mkdir(parents=True, exist_ok=True)
+    for old in PACKS.glob("*"):
+        old.unlink()
+    total = 0
+    for lv in manifest["levels"]:
+        path = DECK / lv["file"]
+        items = json.loads(path.read_text(encoding="utf-8"))
+        name = f"level-{lv['n']:02d}.pack"
+        offset = 0
+        with open(PACKS / name, "wb") as pack:
+            for it in items:
+                it.pop("ap", None)
+                if "au" not in it:
+                    continue
+                src = OUT / f"{it['au'][0]}.mp3"
+                if not src.exists():
+                    continue  # app falls back to tatoeba.org / neural voice
+                data = src.read_bytes()
+                pack.write(data)
+                it["ap"] = [offset, len(data)]
+                offset += len(data)
+        path.write_text(json.dumps(items, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        lv["pack"] = name
+        lv["packBytes"] = offset
+        total += offset
+    manifest["audioBytes"] = total
+    (DECK / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"packs: {len(manifest['levels'])} bundles, {total / 1e6:.0f} MB in {PACKS.relative_to(ROOT)}", file=sys.stderr)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=6)
@@ -94,9 +133,7 @@ def main():
             if n % 500 == 0:
                 print(f"  {n:,}/{len(ids):,} {stats} {time.time() - t0:.0f}s", file=sys.stderr, flush=True)
     size = sum(p.stat().st_size for p in OUT.glob("*.mp3"))
-    # let the app show the real download size for "Save all recordings"
-    manifest["audioBytes"] = sum((OUT / f"{a}.mp3").stat().st_size for a in set(ids) if (OUT / f"{a}.mp3").exists())
-    (DECK / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
+    build_packs(manifest)
     print(f"recordings: {stats}, {size / 1e6:.0f} MB in {OUT.relative_to(ROOT)}", file=sys.stderr)
     if bad:
         print(f"missing (app falls back to tatoeba.org / neural voice): {bad[:20]}{'…' if len(bad) > 20 else ''}", file=sys.stderr)

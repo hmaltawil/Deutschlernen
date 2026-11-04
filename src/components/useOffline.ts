@@ -4,7 +4,7 @@ import { subscribeOffline, type OfflineStatus } from '../lib/offline';
 export function useOffline(): OfflineStatus {
   const [s, setS] = useState<OfflineStatus | null>(null);
   useEffect(() => subscribeOffline(setS), []);
-  return s ?? { app: 'saving', saved: 0, total: 0, bytes: 0, job: null };
+  return s ?? { app: 'saving', savedLevels: 0, totalLevels: 0, savedBytes: 0, totalBytes: 0, job: null, background: null };
 }
 
 export function useOnline(): boolean {

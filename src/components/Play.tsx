@@ -11,6 +11,7 @@ import { go } from '../router';
 import { IconCheck, IconPlay, IconVolume, IconX } from './Icons';
 import { Ring } from './Ring';
 import { syncSoon } from '../lib/sync/engine';
+import { ensureLevelSaved } from '../lib/offline';
 
 interface Outcome {
   points: number;
@@ -66,6 +67,8 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
       setCombo(0);
       setPhase(c.length ? 'playing' : 'empty');
       piper.warm(settings.voice);
+      // keep this level's recordings on the device for offline use
+      if (settings.autoSaveRecordings) for (const lv of new Set(fresh.map((x) => x.lv))) ensureLevelSaved(lv);
     })().catch((e) => {
       if (!cancelled) {
         setErr((e as Error).message);

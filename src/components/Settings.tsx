@@ -16,14 +16,15 @@ import { StartupTime } from './StartupTime';
 
 function OfflineSection() {
   const off = useOffline();
+  const voice = useVoice();
+  const { settings, updateSettings } = useStore();
   useEffect(() => {
     refreshCounts();
-  }, []);
-  const voice = useVoice();
-  const { settings } = useStore();
+  }, [off.background]);
   const voiceReady = voice.state === 'ready' && voice.voiceId === settings.voice;
-  const mb = Math.round(off.bytes / 1e6);
-  const pct = off.job ? Math.round((off.job.done / Math.max(off.job.todo, 1)) * 100) : 0;
+  const mb = (b: number) => Math.round(b / 1e6);
+  const pct = off.job && off.job.todo ? Math.round((off.job.done / off.job.todo) * 100) : 0;
+  const allSaved = off.totalLevels > 0 && off.savedLevels === off.totalLevels;
   return (
     <section className="card">
       <h2>Offline</h2>
@@ -51,12 +52,14 @@ function OfflineSection() {
       </div>
       <div className="field">
         <label>Native-speaker recordings</label>
-        <span className="small" style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-          {off.saved.toLocaleString()} / {off.total.toLocaleString()} saved
+        <span className="small" style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }} data-testid="levels-saved">
+          {off.savedLevels} / {off.totalLevels} levels saved
         </span>
         <span className="hint">
-          Recordings are saved as you hear them. Save all of them (about {mb} MB) to hear native speakers offline
-          too; otherwise the neural voice reads unsaved ones.
+          {allSaved
+            ? `All recordings are on this device (${mb(off.savedBytes)} MB).`
+            : `${mb(off.savedBytes)} of ${mb(off.totalBytes)} MB saved. Without internet, recordings of levels that aren’t saved are read by the neural voice.`}
+          {off.background !== null && !off.job && ` Saving level ${off.background}…`}
         </span>
         {off.job && (
           <div style={{ gridColumn: '1 / -1', marginTop: 6 }} className="stack">
@@ -64,7 +67,7 @@ function OfflineSection() {
               <span style={{ width: `${pct}%` }} />
             </div>
             <span className="tiny muted">
-              Saving… {off.job.done.toLocaleString()} / {off.job.todo.toLocaleString()}
+              Saving… {mb(off.job.done)} / {mb(off.job.todo)} MB
             </span>
           </div>
         )}
@@ -80,13 +83,13 @@ function OfflineSection() {
                 Stop
               </button>
             ) : (
-              off.saved < off.total && (
+              !allSaved && (
                 <button className="btn primary" onClick={() => saveAllRecordings()}>
-                  <IconDownload size={18} /> Save all recordings
+                  <IconDownload size={18} /> Save all recordings ({mb(off.totalBytes - off.savedBytes)} MB)
                 </button>
               )
             )}
-            {!off.job && off.saved > 0 && (
+            {!off.job && off.savedLevels > 0 && (
               <button
                 className="btn ghost danger"
                 onClick={() => confirm('Remove saved recordings from this device?') && removeSavedRecordings()}
@@ -96,6 +99,11 @@ function OfflineSection() {
             )}
           </div>
         )}
+      </div>
+      <div className="field">
+        <label htmlFor="autosave">Save each level’s recordings when I start it</label>
+        <Toggle id="autosave" checked={settings.autoSaveRecordings} onChange={(v) => updateSettings({ autoSaveRecordings: v })} />
+        <span className="hint">About 0.5–12 MB per level, downloaded in the background while you play.</span>
       </div>
     </section>
   );
