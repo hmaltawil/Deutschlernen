@@ -44,12 +44,38 @@ export interface Streak {
 }
 
 /**
- * A streak day = a day whose points reached the goal.
+ * Daily goals over time: [first day, goal] pairs in date order. Changing the goal adds an
+ * entry from today on, so earlier days keep the goal they were played with.
+ */
+export type GoalHistory = [string, number][];
+
+/** Record a goal change made `today` (several changes on one day keep only the last). */
+export function withGoalChange(history: GoalHistory | undefined, oldGoal: number, newGoal: number, today: string): GoalHistory {
+  if (oldGoal === newGoal) return history ?? [];
+  const h: GoalHistory = history?.length ? history.filter(([from]) => from < today) : [];
+  if (!h.length) h.push(['', oldGoal]); // every earlier day used the old goal
+  if (h[h.length - 1][1] !== newGoal) h.push([today, newGoal]);
+  return h;
+}
+
+/** The goal that applied on `date` (today: the current goal). */
+export function goalOn(date: string, today: string, goal: number, history?: GoalHistory): number {
+  if (date >= today || !history?.length) return goal;
+  let g = goal;
+  for (const [from, v] of history) {
+    if (from <= date) g = v;
+    else break;
+  }
+  return g;
+}
+
+/**
+ * A streak day = a day whose points reached the goal of that day.
  * The current streak is still alive if today is not met yet but yesterday was.
  */
-export function streaks(days: Iterable<DayStat>, goal: number, today: string): Streak {
+export function streaks(days: Iterable<DayStat>, goal: number, today: string, history?: GoalHistory): Streak {
   const met = new Set<string>();
-  for (const d of days) if (d.points >= goal && d.points > 0) met.add(d.date);
+  for (const d of days) if (d.points > 0 && d.points >= goalOn(d.date, today, goal, history)) met.add(d.date);
   const todayMet = met.has(today);
   let current = 0;
   let cursor = todayMet ? today : addDays(today, -1);

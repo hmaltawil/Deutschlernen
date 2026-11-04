@@ -91,6 +91,17 @@ export function loadLevel(n: number): Promise<Item[]> {
   return p;
 }
 
+/** Which level every sentence of the current deck is in (loads all level files). */
+export async function levelIndex(): Promise<Map<number, number>> {
+  const m = await loadManifest();
+  const all = await Promise.all(m.levels.map((l) => loadLevel(l.n)));
+  const out = new Map<number, number>();
+  m.levels.forEach((l, i) => {
+    for (const it of all[i]) out.set(it.id, l.n);
+  });
+  return out;
+}
+
 /** Load the given items (grouped by level) and return them in the requested order. */
 export async function getItems(refs: { id: number; lv: number }[]): Promise<Item[]> {
   const levels = [...new Set(refs.map((r) => r.lv))];

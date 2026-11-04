@@ -20,6 +20,8 @@ and prints `PASS`/`FAIL` lines; it exits non-zero on failure. Screenshots go to
 |---|---|
 | `main.cjs` | Full rounds in all modes, wrong answers re-asked, points, persistence after reload, ASCII umlaut input, listening mode, native recording + neural voice download, export/reset/import, stats chart, phone layout without sideways scrolling |
 | `modes.cjs` | Choose / Type / Listen: after an answer the card shows points, mastery, "I know this", and audio plays |
+| `options.cjs` | Settings → While you answer: speaker hidden before answering (and the option to show it), colour hint while typing, same-size box, strict ä/ö/ü/ß, second try for small typos |
+| `update.cjs` | A new version (simulated by changing `dist/sw.js`) never reloads the page during a round; it loads when you leave the round or tap "Next round", and right away on Home. Local preview only |
 | `known.cjs` | "I know this" (button, K key, undo, no re-ask, Known filter, Review again) and "your level" on Home |
 | `migrate.cjs` | Progress from an older deck is re-filed under the new levels once |
 | `recordings.cjs` | Recording bundles: auto-save of the played level, offline playback, Save all / Stop / Remove, cleanup of outdated bundles and of the old per-recording cache |

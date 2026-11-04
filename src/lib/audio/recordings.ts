@@ -94,6 +94,12 @@ function w(): Worker {
       if (m.type === 'done') p.resolve(m.bytes);
       else p.reject(new Error(m.message));
     };
+    worker.onerror = (e) => {
+      const err = new Error(e.message || 'download worker failed');
+      for (const p of pending.values()) p.reject(err);
+      pending.clear();
+      worker = null;
+    };
   }
   return worker;
 }

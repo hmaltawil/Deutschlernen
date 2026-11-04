@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { streaks } from '../lib/scoring';
 import { currentLevel, type Mode } from '../lib/session';
-import { MAX_STAGE } from '../lib/srs';
+import { isMastered } from '../lib/srs';
 import { levelSummary } from '../lib/deck';
 import { useStore } from '../store';
 import { IconClock, IconFlame, IconHeadphones, IconKeyboard, IconList, IconPlay } from './Icons';
@@ -35,8 +35,8 @@ export function ModePicker() {
 export function Home() {
   const { manifest, settings, days, today, dueCount, progress, playedPerLevel, masteredPerLevel } = useStore();
   const pts = days.get(today)?.points ?? 0;
-  const streak = useMemo(() => streaks(days.values(), settings.dailyGoal, today), [days, settings.dailyGoal, today]);
-  const mastered = useMemo(() => [...progress.values()].filter((p) => p.stage >= MAX_STAGE).length, [progress]);
+  const streak = useMemo(() => streaks(days.values(), settings.dailyGoal, today, settings.goalHistory), [days, settings.dailyGoal, today, settings.goalHistory]);
+  const mastered = useMemo(() => [...progress.values()].filter(isMastered).length, [progress]);
   if (!manifest) return null;
   const lv = currentLevel(playedPerLevel, manifest.levels, settings.currentLevel);
   const info = manifest.levels[lv - 1];

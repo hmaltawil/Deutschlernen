@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkAnswer, foldUmlauts, levenshtein, normalize } from './answer';
+import { checkAnswer, foldUmlauts, levenshtein, normalize, onTrack } from './answer';
 
 describe('answer checking', () => {
   it('ignores case, whitespace and edge punctuation', () => {
@@ -21,6 +21,27 @@ describe('answer checking', () => {
     expect(checkAnswer('fur', 'für')).toBe('close');
     expect(checkAnswer('Schwster', 'Schwester')).toBe('close');
     expect(checkAnswer('ab', 'an')).toBe('wrong'); // too short for typo tolerance
+  });
+  it('strict umlauts: ae/oe/ue/ss count as "close", not right', () => {
+    const strict = { strict: true };
+    expect(checkAnswer('für', 'für', strict)).toBe('correct');
+    expect(checkAnswer('FÜR', 'für', strict)).toBe('correct');
+    expect(checkAnswer('fuer', 'für', strict)).toBe('close');
+    expect(checkAnswer('Strasse', 'Straße', strict)).toBe('close');
+    expect(checkAnswer('fur', 'für', strict)).toBe('close');
+    expect(checkAnswer('Michael', 'Michael', strict)).toBe('correct'); // a real "ae" is fine
+  });
+  it('tells whether typing is on track', () => {
+    expect(onTrack('', 'Straße')).toBe(true);
+    expect(onTrack('st', 'Straße')).toBe(true);
+    expect(onTrack('Strass', 'Straße')).toBe(true);
+    expect(onTrack('straß', 'Straße')).toBe(true);
+    expect(onTrack('Strae', 'Straße')).toBe(false);
+    expect(onTrack('fue', 'für')).toBe(true);
+    expect(onTrack('fue', 'für', { strict: true })).toBe(false);
+    expect(onTrack('fü', 'für', { strict: true })).toBe(true);
+    expect(onTrack('E-', 'E-Mail')).toBe(true);
+    expect(onTrack('fürs', 'für')).toBe(false);
   });
   it('rejects wrong and empty answers', () => {
     expect(checkAnswer('Katze', 'Hund')).toBe('wrong');

@@ -196,6 +196,9 @@ export function SyncSection({ joinCode }: { joinCode?: string }) {
               </div>
             )}
           </div>
+          <p className="tiny muted" style={{ margin: '10px 0 0' }}>
+            Progress, points and practice settings are synced. The voice, theme and saved recordings are set on each device.
+          </p>
           <div className="row" style={{ marginTop: 10 }}>
             <button className="btn" disabled={s.state === 'syncing' || !online} onClick={() => syncNow()}>
               Sync now

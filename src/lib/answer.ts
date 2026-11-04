@@ -34,16 +34,34 @@ export function levenshtein(a: string, b: string): number {
   return prev[b.length];
 }
 
+export interface CheckOptions {
+  /** ä, ö, ü and ß must be typed as such (ae/oe/ue/ss only count as "close") */
+  strict?: boolean;
+}
+
 /**
- * Case-insensitive; accepts ae/oe/ue/ss for ä/ö/ü/ß.
+ * Case-insensitive; accepts ae/oe/ue/ss for ä/ö/ü/ß (unless `strict`).
  * "close" = missing umlaut dots or a single typo (still counted as wrong).
  */
-export function checkAnswer(input: string, answer: string): Verdict {
+export function checkAnswer(input: string, answer: string, { strict = false }: CheckOptions = {}): Verdict {
   const a = normalize(input);
   const b = normalize(answer);
   if (!a) return 'wrong';
-  if (a === b || foldUmlauts(a) === foldUmlauts(b)) return 'correct';
-  if (stripUmlauts(a) === stripUmlauts(b)) return 'close';
+  if (a === b) return 'correct';
+  const folded = foldUmlauts(a) === foldUmlauts(b);
+  if (folded && !strict) return 'correct';
+  if (folded || stripUmlauts(a) === stripUmlauts(b)) return 'close';
   if (b.length >= 4 && levenshtein(foldUmlauts(a), foldUmlauts(b)) === 1) return 'close';
   return 'wrong';
+}
+
+/**
+ * While typing: does what's typed so far match the beginning of the answer?
+ * (Same rules as checkAnswer: any case, ae/oe/ue/ss unless strict.)
+ */
+export function onTrack(input: string, answer: string, { strict = false }: CheckOptions = {}): boolean {
+  const a = input.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('de-DE');
+  const b = normalize(answer);
+  if (b.startsWith(a)) return true;
+  return !strict && foldUmlauts(b).startsWith(foldUmlauts(a));
 }

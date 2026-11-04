@@ -92,11 +92,15 @@ async function syncNowAndWait(page) {
   // settings travel too
   await B.page.goto(URL0 + '#/settings');
   await B.page.selectOption('#goal', '300');
+  await B.page.click('#second-try');
+  await B.page.click('.seg[aria-label="Theme"] button:has-text("Dark")'); // a device-only setting
   await B.page.waitForTimeout(500);
   await syncNowAndWait(B.page);
   await A.page.goto(URL0 + '#/settings');
   await syncNowAndWait(A.page);
   ok((await A.page.$eval('#goal', (e) => e.value)) === '300', 'daily goal changed on B shows up on A');
+  ok(await A.page.isChecked('#second-try'), 'a game option changed on B shows up on A');
+  ok((await A.page.evaluate(() => document.documentElement.dataset.theme)) !== 'dark', 'the theme chosen on B stays on B');
 
   // a round finished on A reaches B automatically (sync at end of round + on focus)
   await playRound(A.page, 'kind=new&level=3', 5);

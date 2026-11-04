@@ -36,8 +36,10 @@ python3 scripts/fetch_audio.py          # download recordings to data/audio/ and
 - Push to `main` → `.github/workflows/deploy.yml` runs `npm ci`, `npm test`, builds with
   `BASE_PATH=/<repo>/` and publishes to GitHub Pages (repo Settings → Pages → Source: GitHub Actions).
   Check with `gh run watch <id> --repo hmaltawil/Deutschlernen`.
-- Users get updates automatically (service worker `autoUpdate`); the first open after a deploy loads
-  the update, so tell the owner to "open the app twice".
+- Users get updates automatically (service worker `autoUpdate`, `skipWaiting`). The new version takes
+  over a few seconds after opening and the page reloads — **but never during a round**: `needReload()`
+  in `src/lib/offline.ts` waits until you leave `/play` or tap "Next round" (`applyUpdateIfReady`).
+  `watchForUpdates()` (at startup) also catches an update that took over before the registration ran.
 - **Large binaries (recording bundles):** commit them in batches of ≤ 35 MB and push one commit at a
   time (`git push origin <sha>:refs/heads/main`) — big pushes through the proxy can fail. Push new
   bundles *before* the deck/code commit that references them, and delete old bundles in that last
@@ -55,10 +57,10 @@ scripts/tts-version.mjs      TTS_VERSION = ort<ver>-piper<ver> (also injected as
 public/deck/                 generated deck (committed)        public/audio/  generated bundles (committed)
 src/store.tsx                React context: progress, days, settings; recordAnswer / setKnown; migrations
 src/lib/db.ts                IndexedDB ('luecke' v1: progress, days, kv) — every call goes through withDb()
-src/lib/srs.ts               stages 0–4, intervals 1/7/30/120 days, "known" sentences
-src/lib/session.ts           rounds (due reviews first, then new), currentLevel(), choices, requeue
-src/lib/scoring.ts           points, day stats, streaks
-src/lib/answer.ts            typed-answer checking (case-insensitive, ae/oe/ue/ss accepted)
+src/lib/srs.ts               stages 0–4, intervals 1/7/30/120 days, "known" sentences (keep their stage)
+src/lib/session.ts           rounds (due reviews first, then new), currentLevel(), choices (seededRandom), requeue
+src/lib/scoring.ts           points, day stats, streaks, goal history (goalOn)
+src/lib/answer.ts            typed-answer checking (case-insensitive, ae/oe/ue/ss unless strict), onTrack()
 src/lib/audio/               index.ts (source chain, unlock), recordings.ts (bundles), piper.ts, webspeech.ts
 src/workers/                 piper.worker.ts (neural voice), recordings.worker.ts (writes bundles to OPFS)
 src/lib/offline.ts           service-worker registration, saving bundles, cleanup of old caches
@@ -133,6 +135,16 @@ runtime files under `/tts/<TTS_VERSION>/`. **Recordings are never put in Cache S
 - Merge (`src/lib/sync/core.ts`, pure + unit-tested): per sentence the latest answer wins; each device
   owns its own day stats (totals are sums); newer settings win; "Reset progress" stores `resetAt` and
   clears every device. "Known" is an optional 8th column in progress rows.
+- **Device-only settings** (`DEVICE_SETTINGS` in `src/lib/settings.ts`: voice, theme, autoSaveRecordings)
+  are never taken from another device (a synced voice used to leave the other device on the robotic
+  browser voice). They are still uploaded, so devices on an older version keep theirs. Changing only
+  those doesn't bump `settingsUpdated`.
+- **Import backup** (`importBackup`): re-files sentences under the current deck's levels (`levelIndex()`)
+  and drops ones that left the deck; records older than `resetAt` get `last = resetAt + 1` (otherwise the
+  next sync deletes a backup restored after a reset); if the reset came after the backup, the backup's
+  other-device days become this device's own. Settings syncs first to learn about remote resets.
+- Dirty marks (`markDirty`) are stored and also kept in memory; every step of the chain catches errors,
+  so one failed IndexedDB write can't block sync for the rest of the session.
 - Triggers: start, ~15 s after changes, end of round, online/visibility changes, every 3 min while open.
 - Normal use is ~1% of the free daily quotas; the sync e2e suite writes ~150 docs per run.
 
@@ -158,6 +170,11 @@ runtime files under `/tts/<TTS_VERSION>/`. **Recordings are never put in Cache S
    the emulator between tests.
 9. Playwright's `setOffline` doesn't stop service-worker fetches or media requests; the offline suites stop
    the local server / block the host for a real offline test.
+10. **Choice order:** the old shuffle multiplied the seed by 1103515245 in plain JS numbers; above 2^53 the
+   low bits are lost, so the answer was on button 1 in 0.1% and on button 4 in 47% of sentences. Use
+   32-bit math (`Math.imul`, `seededRandom`); `session.test.ts` checks each button gets ~25%.
+11. **Streaks** use the goal that applied on each day (`settings.goalHistory`, written when the goal
+   changes), so changing the goal never rewrites past streak days.
 
 ## Ideas discussed, not built yet
 

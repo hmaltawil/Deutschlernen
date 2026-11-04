@@ -10,11 +10,11 @@
  * Merge rules
  *   progress  per sentence, the most recently answered record wins
  *   days      each device owns its own entry; totals are the sum over devices
- *   settings  the most recently changed copy wins
+ *   settings  the most recently changed copy wins (device-only settings are never taken from it)
  *   reset     "reset progress" stores resetAt; anything older is dropped everywhere
  */
 import type { DayStat } from '../scoring';
-import type { Settings } from '../settings';
+import { deviceSettings, type Settings } from '../settings';
 import type { Progress } from '../srs';
 
 export const FORMAT = 1;
@@ -236,12 +236,14 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
     result.otherDays = {};
   }
 
-  // settings
+  // settings (device-only ones — voice, theme, auto-save — are never taken from another device)
   if (remote.has('settings')) {
     const theirsChunk = remote.get('settings') ?? null;
     const theirs = theirsChunk ? (JSON.parse(theirsChunk.data) as { updated: number; value: Settings }) : null;
-    if (theirs && theirs.updated > local.settingsUpdated) result.settings = theirs;
-    else if (!theirs || local.settingsUpdated > theirs.updated) {
+    if (theirs && theirs.updated > local.settingsUpdated) {
+      result.settings = { updated: theirs.updated, value: { ...theirs.value, ...deviceSettings(local.settings) } };
+    } else if (!theirs || local.settingsUpdated > theirs.updated) {
+      // still uploaded in full, so devices on an older version don't reset their own voice/theme
       writes.push(['settings', JSON.stringify({ updated: local.settingsUpdated, value: local.settings })]);
     }
   }

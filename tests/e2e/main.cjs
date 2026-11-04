@@ -196,7 +196,7 @@ async function answerRound(page, map, { mode, wrongIdx = [] }) {
   ok((await page.textContent('.tile .value')).trim() === '0', 'reset clears progress');
   await page.goto(URL0 + '#/settings');
   await page.setInputFiles('input[data-testid="import-file"]', file);
-  await page.waitForSelector('text=Backup restored.');
+  await page.waitForSelector('text=/Backup restored: [0-9,]+ sentences/');
   await page.goto(URL0 + '#/');
   await page.waitForSelector('.hero');
   ok(Number((await page.textContent('.tile .value')).trim()) === backup.progress.length, 'import restores progress');

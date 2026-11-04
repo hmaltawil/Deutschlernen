@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { loadLevel, loadManifest, type Item, type Manifest } from './lib/deck';
+import { levelIndex, loadManifest, type Item, type Manifest } from './lib/deck';
 import { getKv, loadAll, migrateProgress, saveAnswer, saveProgress, saveSettings, setKv } from './lib/db';
-import { dayKey, emptyDay, type DayStat } from './lib/scoring';
-import { isDue, markKnown, MAX_STAGE, newProgress, review, type Progress } from './lib/srs';
-import { DEFAULT_SETTINGS, type Settings } from './lib/settings';
+import { dayKey, emptyDay, withGoalChange, type DayStat } from './lib/scoring';
+import { isDue, isMastered, markKnown, newProgress, review, unmarkKnown, type Progress } from './lib/srs';
+import { DEFAULT_SETTINGS, deviceSettings, onlyDeviceSettings, type Settings } from './lib/settings';
 import { piper } from './lib/audio';
 import { allChunkIds, newer, progressChunk, sumDays } from './lib/sync/core';
 import { initSync, markDirty, onSyncApplied } from './lib/sync/engine';
@@ -79,9 +79,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const seen = (await getKv<number>('deckVersion')) ?? 1;
       if (seen !== m.version) {
         if (data.progress.length) {
-          const levelOf = new Map<number, number>();
-          for (const l of m.levels) for (const it of await loadLevel(l.n)) levelOf.set(it.id, l.n);
-          await migrateProgress(levelOf);
+          await migrateProgress(await levelIndex());
           data = await loadAll();
           markDirty(allChunkIds(m.levels.map((l) => l.n), m.version));
         }
@@ -128,7 +126,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         setOtherDays(r.otherDays);
         if (r.settings) {
-          const next = { ...DEFAULT_SETTINGS, ...r.settings.value };
+          const next = { ...DEFAULT_SETTINGS, ...r.settings.value, ...deviceSettings(settingsRef.current) };
           settingsRef.current = next;
           setSettings(next);
         }
@@ -174,13 +172,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const cur = progressRef.current.get(id);
     if (!cur) return null;
     const t = Date.now();
-    let next: Progress;
-    if (known) next = markKnown(cur, t);
-    else {
-      const { known: _k, ...base } = restore ?? { ...cur, due: t }; // back into reviews: due now
-      void _k;
-      next = { ...base, last: t };
-    }
+    // back into reviews: the exact earlier record (undo), else due now at its own stage
+    const next = known ? markKnown(cur, t) : restore ? { ...unmarkKnown(restore, t), due: restore.due } : unmarkKnown(cur, t);
     const p = new Map(progressRef.current).set(id, next);
     progressRef.current = p;
     setProgress(p);
@@ -191,10 +184,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
-    const next = { ...settingsRef.current, ...patch };
+    const cur = settingsRef.current;
+    if (patch.dailyGoal !== undefined && patch.dailyGoal !== cur.dailyGoal) {
+      patch = { ...patch, goalHistory: withGoalChange(cur.goalHistory, cur.dailyGoal, patch.dailyGoal, dayKey(Date.now())) };
+    }
+    const next = { ...cur, ...patch };
     settingsRef.current = next;
     setSettings(next);
-    saveSettings(next, Date.now()).then(() => markDirty(['settings']));
+    // voice, theme and auto-save stay on this device: nothing to sync
+    if (onlyDeviceSettings(patch)) saveSettings(next).catch(() => {});
+    else saveSettings(next, Date.now()).then(() => markDirty(['settings']), () => {});
   }, []);
 
   const days = useMemo(() => {
@@ -209,7 +208,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     for (const p of progress.values()) {
       if (isDue(p, now)) dueCount++;
       playedPerLevel.set(p.lv, (playedPerLevel.get(p.lv) ?? 0) + 1);
-      if (p.stage >= MAX_STAGE) masteredPerLevel.set(p.lv, (masteredPerLevel.get(p.lv) ?? 0) + 1);
+      if (isMastered(p)) masteredPerLevel.set(p.lv, (masteredPerLevel.get(p.lv) ?? 0) + 1);
     }
     return { dueCount, playedPerLevel, masteredPerLevel };
   }, [progress, now]);

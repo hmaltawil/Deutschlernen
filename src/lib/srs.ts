@@ -48,9 +48,28 @@ export function review(
 /** Far enough in the future that a known sentence never comes due (and still fits a Date). */
 const NEVER = 100 * 365 * DAY;
 
-/** Mark a sentence as known: 100% mastered, never reviewed. */
+/**
+ * Mark a sentence as known: counts as 100% mastered and is never reviewed.
+ * Its own stage is kept, so "Review again" brings it back where it was.
+ */
 export function markKnown(p: Progress, now: number): Progress {
-  return { ...p, known: true, stage: MAX_STAGE, due: now + NEVER, last: now };
+  return { ...p, known: true, due: now + NEVER, last: now };
+}
+
+/** Put a known sentence back into reviews (due now) at the stage it had before. */
+export function unmarkKnown(p: Progress, now: number): Progress {
+  const { known: _drop, ...rest } = p;
+  void _drop;
+  return { ...rest, due: now, last: now };
+}
+
+/** The stage shown to the learner: known sentences count as 100%. */
+export function shownStage(p: Progress): number {
+  return p.known ? MAX_STAGE : p.stage;
+}
+
+export function isMastered(p: Progress): boolean {
+  return shownStage(p) >= MAX_STAGE;
 }
 
 export function mastery(stage: number): number {

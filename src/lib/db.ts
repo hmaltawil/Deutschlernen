@@ -2,8 +2,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Progress } from './srs';
 import type { DayStat } from './scoring';
-import { DEFAULT_SETTINGS, type Settings } from './settings';
-import { newer, type SyncResult } from './sync/core';
+import { DEFAULT_SETTINGS, deviceSettings, type Settings } from './settings';
+import { newer, sumDays, type SyncResult } from './sync/core';
 
 interface LueckeDB extends DBSchema {
   progress: { key: number; value: Progress; indexes: { due: number } };
@@ -149,11 +149,12 @@ export async function saveProgress(p: Progress): Promise<void> {
   await withDb((d) => d.put('progress', p));
 }
 
-export async function saveSettings(s: Settings, updated = Date.now()): Promise<void> {
+/** Save the settings; `updated` (when the shared settings last changed, for sync) only if given. */
+export async function saveSettings(s: Settings, updated?: number): Promise<void> {
   return withDb(async (d) => {
     const tx = d.transaction('kv', 'readwrite');
     tx.store.put(s, 'settings');
-    tx.store.put(updated, 'settingsUpdated');
+    if (updated !== undefined) tx.store.put(updated, 'settingsUpdated');
     await tx.done;
   });
 }
@@ -182,7 +183,9 @@ export async function applySync(r: SyncResult): Promise<void> {
     await kv.put(r.otherDays, 'otherDays');
     await kv.put(r.resetAt, 'resetAt');
     if (r.settings) {
-      await kv.put({ ...DEFAULT_SETTINGS, ...r.settings.value }, 'settings');
+      // keep this device's own settings as they are now (they may have changed during the sync)
+      const cur = ((await kv.get('settings')) ?? {}) as Partial<Settings>;
+      await kv.put({ ...DEFAULT_SETTINGS, ...r.settings.value, ...deviceSettings(cur) }, 'settings');
       await kv.put(r.settings.updated, 'settingsUpdated');
     }
     await tx.done;
@@ -207,18 +210,52 @@ export function validateBackup(x: unknown): Backup {
   return b;
 }
 
-/** Replace all data on this device with the backup's contents. */
-export async function importBackup(raw: unknown): Promise<void> {
+export interface ImportResult {
+  restored: number;
+  /** sentences in the backup that are no longer in the deck */
+  dropped: number;
+}
+
+/**
+ * Replace all data on this device with the backup's contents.
+ *
+ * - `levelOf` (sentence id → level in the current deck) re-files every sentence under its
+ *   current level, so a backup made before a deck update fits the new levels; sentences
+ *   that left the deck are left out.
+ * - If progress was reset after the backup was made, sync would delete everything older
+ *   than the reset again. Restoring is the newer decision, so restored records count from
+ *   just after the reset (answers made since then on other devices still win), and the
+ *   other devices' daily stats from the backup are kept as this device's own.
+ * - This device's own settings (voice, theme, auto-save) stay as they are.
+ */
+export async function importBackup(raw: unknown, levelOf?: Map<number, number>): Promise<ImportResult> {
   const b = validateBackup(raw);
   return withDb(async (d) => {
     const tx = d.transaction(['progress', 'days', 'kv'], 'readwrite');
+    const kv = tx.objectStore('kv');
+    const resetAt = ((await kv.get('resetAt')) as number | undefined) ?? 0;
+    const cur = ((await kv.get('settings')) ?? {}) as Partial<Settings>;
     await Promise.all([tx.objectStore('progress').clear(), tx.objectStore('days').clear()]);
-    for (const p of b.progress) tx.objectStore('progress').put(p);
-    for (const day of b.days) tx.objectStore('days').put(day);
-    tx.objectStore('kv').put({ ...DEFAULT_SETTINGS, ...b.settings }, 'settings');
-    tx.objectStore('kv').put(Date.now(), 'settingsUpdated');
-    tx.objectStore('kv').put(b.otherDays ?? {}, 'otherDays');
+    let restored = 0;
+    let dropped = 0;
+    for (const p of b.progress) {
+      const lv = levelOf ? levelOf.get(p.id) : p.lv;
+      if (lv === undefined) {
+        dropped++;
+        continue;
+      }
+      const last = (p.last ?? 0) < resetAt ? resetAt + 1 : p.last;
+      tx.objectStore('progress').put({ ...p, lv, last });
+      restored++;
+    }
+    const resetSinceBackup = resetAt > (Date.parse(b.exported) || 0);
+    const own = resetSinceBackup ? sumDays([b.days, ...Object.values(b.otherDays ?? {})]) : b.days;
+    for (const day of own) tx.objectStore('days').put(day);
+    kv.put({ ...DEFAULT_SETTINGS, ...b.settings, ...deviceSettings(cur) }, 'settings');
+    kv.put(Date.now(), 'settingsUpdated');
+    kv.put(resetSinceBackup ? {} : (b.otherDays ?? {}), 'otherDays');
     await tx.done;
+    return { restored, dropped };
   });
 }
 

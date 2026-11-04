@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { checkAnswer, type Verdict } from '../lib/answer';
+import { checkAnswer, onTrack, type Verdict } from '../lib/answer';
 import { getItems, loadLevel, tatoebaUrl, type Item } from '../lib/deck';
 import { pointsFor } from '../lib/scoring';
 import { choices, currentLevel, makeCards, pickNew, pickReviews, requeue, type Card, type Mode, type RoundKind } from '../lib/session';
@@ -11,7 +11,7 @@ import { go } from '../router';
 import { IconCheck, IconPlay, IconVolume, IconX } from './Icons';
 import { Ring } from './Ring';
 import { syncSoon } from '../lib/sync/engine';
-import { ensureLevelSaved } from '../lib/offline';
+import { applyUpdateIfReady, ensureLevelSaved } from '../lib/offline';
 
 interface Outcome {
   points: number;
@@ -157,7 +157,7 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
       </div>
     );
   }
-  if (phase === 'done') return <Summary results={results} known={knownIds} onAgain={() => setRound((r) => r + 1)} />;
+  if (phase === 'done') return <Summary results={results} known={knownIds} onAgain={() => applyUpdateIfReady() || setRound((r) => r + 1)} />;
 
   const card = cards[idx];
   const roundPoints = results.reduce((s, r) => s + r.points, 0);
@@ -260,6 +260,8 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
   const [beforeKnown, setBeforeKnown] = useState<Progress | null>(null);
   const answerSaved = useRef<Promise<unknown> | null>(null);
   const [saveError, setSaveError] = useState(false);
+  /** a near-miss was typed and the learner may fix it once (setting "second try") */
+  const [secondChance, setSecondChance] = useState(false);
   const knownBusy = useRef(false);
   const toggleKnown = useCallback(async () => {
     if (knownBusy.current) return;
@@ -283,6 +285,9 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
   const before = item.de.slice(0, item.c[0]);
   const after = item.de.slice(item.c[1]);
   const typing = mode === 'text' || mode === 'listen';
+  // Choose/Type: hearing the sentence before answering gives the missing word away (setting)
+  const canHear = answered || mode === 'listen' || settings.audioBeforeAnswer;
+  const strict = settings.strictUmlauts;
 
   const speak = useCallback(async () => {
     try {
@@ -302,9 +307,14 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
   }, []);
 
   const submit = useCallback(
-    async (value: string, fromChoice: boolean) => {
+    async (value: string, fromChoice: boolean, giveUp = false) => {
       if (verdict) return;
-      const v: Verdict = fromChoice ? (value === item.a ? 'correct' : 'wrong') : checkAnswer(value, item.a);
+      const v: Verdict = fromChoice ? (value === item.a ? 'correct' : 'wrong') : checkAnswer(value, item.a, { strict });
+      if (v === 'close' && !giveUp && settings.secondTry && !secondChance) {
+        setSecondChance(true); // one letter off: let them fix it (counts as right for half points)
+        inputRef.current?.focus();
+        return;
+      }
       answeredAt.current = performance.now();
       setVerdict(v);
       setRevealed(true);
@@ -312,12 +322,12 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
       const used: Mode = mode === 'listen' && revealedEarly ? 'text' : mode;
       // play first, while the tap is fresh (iPhone only lets sound start right after a tap)
       if (settings.autoplay) speak();
-      const res = onAnswer(v === 'correct', value, hint, used);
+      const res = onAnswer(v === 'correct', value, hint || secondChance, used);
       setOutcome(res);
       answerSaved.current = res.saved.catch(() => {});
       res.saved.catch(() => setSaveError(true));
     },
-    [verdict, item.a, mode, revealedEarly, hint, onAnswer, settings.autoplay, speak],
+    [verdict, item.a, mode, revealedEarly, hint, onAnswer, settings.autoplay, settings.secondTry, speak, strict, secondChance],
   );
 
   useEffect(() => {
@@ -325,8 +335,8 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
   }, [answered]);
 
   // keyboard: 1–4 choose, Enter next, R replay
-  const keyState = useRef({ answered, opts, submit, onNext, speak, mode, toggleKnown, outcome });
-  keyState.current = { answered, opts, submit, onNext, speak, mode, toggleKnown, outcome };
+  const keyState = useRef({ answered, opts, submit, onNext, speak, mode, toggleKnown, outcome, canHear });
+  keyState.current = { answered, opts, submit, onNext, speak, mode, toggleKnown, outcome, canHear };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = keyState.current;
@@ -340,7 +350,7 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
         if (performance.now() - answeredAt.current < 350) return;
         e.preventDefault();
         s.onNext();
-      } else if (!inField && (e.key === 'r' || e.key === 'R')) {
+      } else if (!inField && s.canHear && (e.key === 'r' || e.key === 'R')) {
         e.preventDefault();
         s.speak();
       } else if (!inField && s.answered && (e.key === 'k' || e.key === 'K')) {
@@ -376,13 +386,15 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
     inputRef.current?.focus();
   };
 
-  const width = `${Math.max(item.a.length + 1, 5)}ch`;
+  // fitBox: as wide as the missing word; otherwise the same size for every word, growing as you type
+  const width = settings.fitBox ? `${Math.max(item.a.length + 1, 5)}ch` : `${Math.max(given.length + 2, 8)}ch`;
+  const track = settings.typingColor && given.trim() ? (onTrack(given, item.a, { strict }) ? ' on-track' : ' off-track') : '';
   const gap = answered ? (
     <span className={`filled ${verdict === 'correct' ? 'ok' : 'bad'}`}>{item.a}</span>
   ) : typing ? (
     <input
       ref={inputRef}
-      className="blank-input"
+      className={`blank-input${track}`}
       style={{ width }}
       value={given}
       onChange={(e) => setGiven(e.target.value)}
@@ -415,7 +427,16 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
             #{item.r.toLocaleString()}
           </span>
         </div>
-        <button type="button" className="btn ghost icon-btn" onClick={speak} aria-label="Play sentence audio (R)" title="Play audio (R)">
+        <button
+          type="button"
+          className="btn ghost icon-btn"
+          onClick={speak}
+          aria-label="Play sentence audio (R)"
+          title="Play audio (R)"
+          disabled={!canHear}
+          aria-hidden={!canHear}
+          style={canHear ? undefined : { visibility: 'hidden' }}
+        >
           <IconVolume />
         </button>
       </div>
@@ -471,6 +492,11 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
 
       {typing && !answered && (
         <div className="stack" style={{ marginTop: 18, gap: 12 }}>
+          {secondChance && (
+            <div className="try-again small" role="status">
+              Almost! Check the spelling and try again.
+            </div>
+          )}
           <div className="spread">
             <div className="umlauts" aria-label="Insert special characters">
               {['ä', 'ö', 'ü', 'ß'].map((c) => (
@@ -483,7 +509,7 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
               <button type="button" className="btn ghost" onClick={useHint} disabled={hint}>
                 Hint
               </button>
-              <button type="button" className="btn ghost" onClick={() => submit(given, false)}>
+              <button type="button" className="btn ghost" onClick={() => submit(given, false, true)}>
                 Don’t know
               </button>
             </div>

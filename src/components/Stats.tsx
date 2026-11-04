@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { addDays, dayKey, streaks } from '../lib/scoring';
+import { shownStage } from '../lib/srs';
 import { useStore } from '../store';
 import { ColumnChart, SegmentedBar, type Datum } from './charts';
 
@@ -15,7 +16,7 @@ const weekday = (key: string) => {
 export function Stats() {
   const { manifest, progress, days, settings, today, now, dueCount, playedPerLevel, masteredPerLevel } = useStore();
 
-  const streak = useMemo(() => streaks(days.values(), settings.dailyGoal, today), [days, settings.dailyGoal, today]);
+  const streak = useMemo(() => streaks(days.values(), settings.dailyGoal, today, settings.goalHistory), [days, settings.dailyGoal, today, settings.goalHistory]);
 
   const totals = useMemo(() => {
     let correct = 0;
@@ -27,7 +28,7 @@ export function Stats() {
       points += d.points;
     }
     const stages = [0, 0, 0, 0, 0];
-    for (const p of progress.values()) stages[p.stage]++;
+    for (const p of progress.values()) stages[shownStage(p)]++;
     return { correct, wrong, points, stages, accuracy: correct + wrong ? Math.round((correct / (correct + wrong)) * 100) : null };
   }, [days, progress]);
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAY, dueList, isDue, markKnown, mastery, newProgress, review } from './srs';
+import { DAY, dueList, isDue, isMastered, markKnown, mastery, newProgress, review, shownStage, unmarkKnown } from './srs';
 
 const T0 = Date.UTC(2026, 10, 3);
 
@@ -42,10 +42,21 @@ describe('srs', () => {
   it('known sentences count as mastered and never come due', () => {
     const p = markKnown(review(newProgress(1, 1, T0), false, T0), T0 + 5);
     expect(p.known).toBe(true);
-    expect(mastery(p.stage)).toBe(100);
+    expect(mastery(shownStage(p))).toBe(100);
+    expect(isMastered(p)).toBe(true);
     expect(isDue(p, T0 + 50 * 365 * DAY)).toBe(false);
     expect(dueList([p], T0 + 50 * 365 * DAY)).toEqual([]);
     expect(new Date(p.due).getFullYear()).toBeGreaterThan(2100); // still a valid date
+  });
+  it('"Review again" brings a known sentence back at the stage it had before', () => {
+    const learning = review(newProgress(1, 1, T0), true, T0); // 25%
+    const back = unmarkKnown(markKnown(learning, T0 + 5), T0 + 9);
+    expect(back.known).toBeUndefined();
+    expect(back.stage).toBe(1);
+    expect(isDue(back, T0 + 9)).toBe(true);
+    expect(isMastered(back)).toBe(false);
+    // one correct answer moves it to 50% (7 days), not 100% (120 days)
+    expect(review(back, true, T0 + 9).due).toBe(T0 + 9 + 7 * DAY);
   });
   it('answering a known sentence again puts it back into reviews', () => {
     const p = review(markKnown(newProgress(1, 1, T0), T0), false, T0 + 1);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dayKey, emptyDay, pointsFor, streaks } from './scoring';
+import { addDays, dayKey, emptyDay, goalOn, pointsFor, streaks, withGoalChange } from './scoring';
 
 const day = (date: string, points: number) => ({ ...emptyDay(date), points });
 
@@ -32,5 +32,30 @@ describe('scoring', () => {
     // a gap breaks it
     expect(streaks(days, goal, '2026-11-05').current).toBe(0);
     expect(streaks([], goal, '2026-11-05')).toEqual({ current: 0, best: 0, todayMet: false });
+  });
+  it('changing the daily goal does not rewrite earlier days', () => {
+    const days = ['2026-11-01', '2026-11-02', '2026-11-03'].map((d) => day(d, 250));
+    const today = '2026-11-04';
+    expect(streaks(days, 200, today).current).toBe(3);
+    // raise the goal to 300 today: the three days played at 200 still count
+    const h = withGoalChange(undefined, 200, 300, today);
+    expect(streaks(days, 300, today, h)).toEqual({ current: 3, best: 3, todayMet: false });
+    expect(streaks([...days, day(today, 250)], 300, today, h).todayMet).toBe(false); // today needs 300
+    expect(streaks([...days, day(today, 300)], 300, today, h).current).toBe(4);
+    // lowering it doesn't turn missed days into streak days
+    const low = [day('2026-11-01', 60), day('2026-11-02', 60)];
+    expect(streaks(low, 50, today, withGoalChange(undefined, 100, 50, today)).best).toBe(0);
+    // tomorrow, today is judged by the goal it was played with
+    expect(goalOn(today, '2026-11-05', 300, h)).toBe(300);
+    expect(goalOn('2026-11-03', '2026-11-05', 300, h)).toBe(200);
+  });
+  it('keeps one entry per day when the goal is changed several times', () => {
+    let h = withGoalChange(undefined, 200, 300, '2026-11-04');
+    h = withGoalChange(h, 300, 500, '2026-11-04');
+    expect(h).toEqual([['', 200], ['2026-11-04', 500]]);
+    h = withGoalChange(h, 500, 200, '2026-11-04'); // back to where the day started
+    expect(h).toEqual([['', 200]]);
+    h = withGoalChange(h, 200, 100, '2026-11-09');
+    expect(h).toEqual([['', 200], ['2026-11-09', 100]]);
   });
 });

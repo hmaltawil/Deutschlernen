@@ -59,4 +59,13 @@ describe('session', () => {
     expect(new Set(a)).toEqual(new Set(['habe', 'bin', 'hast', 'gibt']));
     expect(choices(item(42))).toEqual(a);
   });
+  it('puts the answer on each of the four buttons about equally often', () => {
+    // Tatoeba ids go up to ~13 million; check small and large ids
+    for (const start of [1, 9_000_000]) {
+      const pos = [0, 0, 0, 0];
+      const n = 20_000;
+      for (let id = start; id < start + n; id++) pos[choices(item(id)).indexOf('habe')]++;
+      for (const c of pos) expect(Math.abs(c / n - 0.25)).toBeLessThan(0.015);
+    }
+  });
 });

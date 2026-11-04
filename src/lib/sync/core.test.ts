@@ -174,6 +174,23 @@ describe('two devices', () => {
     expect(A.settings.mode).toBe('text');
   });
 
+  it('voice, theme and auto-save stay on each device', async () => {
+    const remote = new FakeRemote();
+    let A = device('A', { settings: { ...DEFAULT_SETTINGS, voice: 'de_DE-thorsten-high', theme: 'light', autoSaveRecordings: false }, settingsUpdated: 1000 });
+    let B = device('B', { settings: { ...DEFAULT_SETTINGS, voice: 'de_DE-kerstin-low', theme: 'dark' } });
+    A = await sync(remote, A, 1100);
+    B = await sync(remote, B, 1200);
+    expect(B.settings).toMatchObject({ voice: 'de_DE-kerstin-low', theme: 'dark', autoSaveRecordings: true });
+    // shared settings still travel; and an old client's upload with a voice doesn't change B's voice
+    remote.docs.set('settings', { v: 1, data: JSON.stringify({ updated: 3000, value: { ...DEFAULT_SETTINGS, roundSize: 20, voice: 'de_DE-eva_k-x_low' } }), updated: 3000 });
+    const meta = JSON.parse(remote.docs.get('meta')!.data);
+    meta.versions.settings = 3000;
+    remote.docs.set('meta', { v: 1, data: JSON.stringify(meta), updated: 3000 });
+    B = await sync(remote, B, 3100);
+    expect(B.settings.roundSize).toBe(20);
+    expect(B.settings.voice).toBe('de_DE-kerstin-low');
+  });
+
   it('a reset on one device clears progress and points on the other', async () => {
     const remote = new FakeRemote();
     let A = device('A', { progress: [p(1, 1, 1000)], ownDays: [day('2026-11-01', 100)] });

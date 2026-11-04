@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { exportBackup, importBackup, resetProgress } from '../lib/db';
+import { exportBackup, importBackup, resetProgress, validateBackup } from '../lib/db';
+import { levelIndex } from '../lib/deck';
 import { piper, speakText } from '../lib/audio';
 import { DEFAULT_SETTINGS, VOICES, type Theme } from '../lib/settings';
 import { useStore } from '../store';
@@ -145,11 +146,18 @@ export function SettingsPage({ joinCode }: { joinCode?: string }) {
   const doImport = async (f: File) => {
     try {
       const data = JSON.parse(await f.text());
+      validateBackup(data);
       if (!confirm('Replace all progress on this device with this backup?')) return;
-      await importBackup(data);
+      setMsg('Restoring…');
+      if (syncing) await syncNow(); // hear about a reset made on another device first
+      const { restored, dropped } = await importBackup(data, await levelIndex());
       await reload();
       resyncAll();
-      setMsg(syncing ? 'Backup restored and combined with your synced progress.' : 'Backup restored.');
+      const left = dropped ? ` (${dropped.toLocaleString()} no longer in the deck were left out)` : '';
+      setMsg(
+        `Backup restored: ${restored.toLocaleString()} sentences${left}` +
+          (syncing ? ', combined with your synced progress.' : '.'),
+      );
     } catch (e) {
       setMsg((e as Error).message);
     }
@@ -196,10 +204,6 @@ export function SettingsPage({ joinCode }: { joinCode?: string }) {
           <span className="hint">A streak day is a day you reach this goal.</span>
         </div>
         <div className="field">
-          <label htmlFor="hint">Show English translation while answering</label>
-          <Toggle id="hint" checked={settings.showHint} onChange={(v) => updateSettings({ showHint: v })} />
-        </div>
-        <div className="field">
           <label>Review intervals (days)</label>
           <div className="intervals">
             {settings.intervals.map((d, i) => (
@@ -224,6 +228,49 @@ export function SettingsPage({ joinCode }: { joinCode?: string }) {
             <button className="btn ghost" style={{ minHeight: 0, padding: '0 4px' }} onClick={() => updateSettings({ intervals: [...DEFAULT_SETTINGS.intervals] })}>
               Reset
             </button>
+          </span>
+        </div>
+      </section>
+
+      <section className="card" data-testid="game-options">
+        <h2>While you answer</h2>
+        <div className="field">
+          <label htmlFor="hint">Show English translation</label>
+          <Toggle id="hint" checked={settings.showHint} onChange={(v) => updateSettings({ showHint: v })} />
+          <span className="hint">Shown under the sentence while you answer. After answering it is always shown.</span>
+        </div>
+        <div className="field">
+          <label htmlFor="audio-before">Speaker button before answering</label>
+          <Toggle id="audio-before" checked={settings.audioBeforeAnswer} onChange={(v) => updateSettings({ audioBeforeAnswer: v })} />
+          <span className="hint">
+            In Choose and Type, lets you hear the sentence before you answer — which gives the missing word away. Listen
+            always plays it.
+          </span>
+        </div>
+        <div className="field">
+          <label htmlFor="typing-color">Colour hint while typing</label>
+          <Toggle id="typing-color" checked={settings.typingColor} onChange={(v) => updateSettings({ typingColor: v })} />
+          <span className="hint">The box turns green while what you type matches the answer so far, red as soon as it doesn’t.</span>
+        </div>
+        <div className="field">
+          <label htmlFor="fit-box">Box fits the missing word</label>
+          <Toggle id="fit-box" checked={settings.fitBox} onChange={(v) => updateSettings({ fitBox: v })} />
+          <span className="hint">
+            The typing box is as wide as the missing word. Turn off to get the same size box for every word, so its length
+            doesn’t give it away.
+          </span>
+        </div>
+        <div className="field">
+          <label htmlFor="strict-umlauts">Require ä, ö, ü and ß</label>
+          <Toggle id="strict-umlauts" checked={settings.strictUmlauts} onChange={(v) => updateSettings({ strictUmlauts: v })} />
+          <span className="hint">When off, ae, oe, ue and ss also count (“fuer” for “für”).</span>
+        </div>
+        <div className="field">
+          <label htmlFor="second-try">Second try for small typos</label>
+          <Toggle id="second-try" checked={settings.secondTry} onChange={(v) => updateSettings({ secondTry: v })} />
+          <span className="hint">
+            If your answer is one letter off or misses umlaut dots, you can fix it once. A fixed answer counts as right,
+            for half the points.
           </span>
         </div>
       </section>

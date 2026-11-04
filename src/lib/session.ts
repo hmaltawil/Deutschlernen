@@ -72,13 +72,29 @@ export function requeue(cards: Card[], index: number, correct: boolean): Card[] 
   return [...cards, { item: card.item, isNew: false, retry: true }];
 }
 
+/**
+ * Small deterministic random numbers in [0, 1) from a seed (mulberry32).
+ * All arithmetic stays within 32 bits (Math.imul): plain `seed * bigNumber` loses its
+ * low bits once it passes 2^53, which made the old shuffle put the answer on button 1
+ * almost never and on button 4 about half the time.
+ */
+export function seededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /** Multiple-choice options: answer + distractors in a stable per-sentence shuffled order. */
 export function choices(item: Item): string[] {
   const opts = [item.a, ...item.d];
-  let seed = item.id;
+  const rand = seededRandom(item.id);
   for (let i = opts.length - 1; i > 0; i--) {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    const j = seed % (i + 1);
+    const j = Math.floor(rand() * (i + 1));
     [opts[i], opts[j]] = [opts[j], opts[i]];
   }
   return opts;

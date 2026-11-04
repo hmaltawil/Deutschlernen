@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { levelSummary, loadLevel, type Item } from '../lib/deck';
-import { mastery } from '../lib/srs';
+import { mastery, shownStage } from '../lib/srs';
 import { currentLevel } from '../lib/session';
 import { useStore } from '../store';
 import { IconArrowLeft, IconPlay } from './Icons';
@@ -117,7 +117,7 @@ export function LevelDetail({ n }: { n: number }) {
               <div key={it.id} className="sent-row">
                 <span
                   className="dot"
-                  style={{ background: p ? STAGE_COLOR[p.stage] : 'transparent', border: p ? 0 : '1.5px solid var(--line)' }}
+                  style={{ background: p ? STAGE_COLOR[shownStage(p)] : 'transparent', border: p ? 0 : '1.5px solid var(--line)' }}
                   title={p ? (p.known ? 'Known' : `${mastery(p.stage)}% mastered`) : 'Not played yet'}
                 />
                 <div>

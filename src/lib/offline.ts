@@ -56,6 +56,38 @@ async function deckIsCached(): Promise<boolean> {
   }
 }
 
+let updateReady = false;
+const playing = () => location.hash.replace(/^#/, '').split('?')[0] === '/play';
+
+/** A new version is active: reload to use it, but never in the middle of a round. */
+function needReload() {
+  if (updateReady) return;
+  updateReady = true;
+  if (!playing()) location.reload();
+  else window.addEventListener('hashchange', () => !playing() && location.reload());
+}
+
+/**
+ * Call at startup (cheap). The browser checks for a new version as soon as the app opens,
+ * and the new version can take over before the service worker registration below runs;
+ * notice that too, so the update is used on this open instead of the next one.
+ */
+export function watchForUpdates() {
+  if (!('serviceWorker' in navigator) || import.meta.env.DEV) return;
+  const hadController = !!navigator.serviceWorker.controller; // false on the very first visit
+  navigator.serviceWorker.addEventListener('controllerchange', () => hadController && needReload());
+}
+
+/**
+ * Between rounds (the "Next round" button): if a new version of the app is waiting,
+ * reload now — the next round then starts in the new version. Returns true if it reloads.
+ */
+export function applyUpdateIfReady(): boolean {
+  if (!updateReady) return false;
+  location.reload();
+  return true;
+}
+
 export function initOffline() {
   const supported = 'serviceWorker' in navigator && 'caches' in window && !import.meta.env.DEV;
   if (!supported) {
@@ -65,6 +97,7 @@ export function initOffline() {
   registerSW({
     immediate: true,
     onOfflineReady: () => set({ app: 'ready' }),
+    onNeedReload: needReload,
   });
   deckIsCached().then((ok) => {
     if (ok) set({ app: 'ready' });

@@ -12,10 +12,11 @@ A cloze-sentence trainer for German. You learn words by filling the gap in real 
   2. **Neural German voice** for everything else. Piper runs on your device and is downloaded once (~63 MB). After that it works offline.
   3. The browser's own voice, used only if the neural voice isn't available.
 - **Works offline.** A service worker saves the app and all sentences on the device (~7 MB). A level's recordings are saved on the device when you start playing it, or all at once from Settings → Offline (89 MB). Without internet, recordings of unsaved levels are read by the neural voice.
-- **"I know this"** after an answer takes a too-easy sentence out of reviews; Home follows the level you play.
+- **"I know this"** after an answer takes a too-easy sentence out of reviews ("Review again" on the level page brings it back where it was); Home follows the level you play.
+- **Game options** (Settings → While you answer): English translation, speaker button before answering (off: hearing the sentence gives the word away), colour hint while typing, box that fits the word or is the same size for every word, strict ä/ö/ü/ß, and a second try for small typos.
   Recordings are kept as 30 bundles in the browser's private file system rather than ~11,000 separate cache entries: with that many entries Safari on iPhone took ~10 s to open the app (0.2 s with bundles).
 - **Stats:** points per day, mastery breakdown, upcoming reviews, progress per level.
-- **Sync between devices (optional).** Settings → Sync gives one device a secret 24-character sync code (with a QR code). Enter it on other devices and progress, points, streaks and settings stay in step. No account is needed; data is stored in Firebase Firestore under the SHA-256 of the code. Each sentence keeps its most recent answer, each device's points add up, and everything keeps working offline and syncs when you reconnect.
+- **Sync between devices (optional).** Settings → Sync gives one device a secret 24-character sync code (with a QR code). Enter it on other devices and progress, points, streaks and practice settings stay in step (the voice, theme and saved recordings are set per device). No account is needed; data is stored in Firebase Firestore under the SHA-256 of the code. Each sentence keeps its most recent answer, each device's points add up, and everything keeps working offline and syncs when you reconnect.
 - **Your data stays on your device** (IndexedDB). Settings has export/import for backups.
 
 ## Run it
@@ -75,7 +76,7 @@ npm run test:rules
 | `scripts/copy-tts-assets.mjs` | Copies the ONNX Runtime + Piper phonemizer WASM into `public/tts/` (runs automatically) |
 | `src/lib/srs.ts` | Spaced-repetition scheduling |
 | `src/lib/session.ts` | Builds rounds (due reviews first, then new sentences by level) |
-| `src/lib/answer.ts` | Answer checking (case-insensitive; accepts ae/oe/ue/ss) |
+| `src/lib/answer.ts` | Answer checking (case-insensitive; accepts ae/oe/ue/ss unless strict), typing colour hint |
 | `src/lib/scoring.ts` | Points, daily stats, streaks |
 | `src/lib/db.ts` | IndexedDB storage, backup export/import |
 | `src/lib/offline.ts` + `vite.config.ts` (VitePWA) | Service worker, offline status, saving recording bundles |

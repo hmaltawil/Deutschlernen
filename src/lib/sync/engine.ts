@@ -72,23 +72,37 @@ async function getRemote(): Promise<Remote> {
 
 /* ---------- dirty tracking: chunk → change counter ---------- */
 
-let dirtyChain: Promise<unknown> = Promise.resolve();
+// The marks are stored (so they survive closing the app) and also kept in memory for this
+// session: if storing one fails (Safari dropping the database), the next sync still sends
+// that chunk. Every step catches its errors, so one failure never blocks later syncs.
+let dirtyChain: Promise<void> = Promise.resolve();
+const memDirty = new Map<string, number>();
 
 export function markDirty(chunks: string[]) {
-  dirtyChain = dirtyChain.then(async () => {
-    const d = (await getKv<Record<string, number>>('syncDirty')) ?? {};
-    for (const c of chunks) d[c] = (d[c] ?? 0) + 1;
-    await setKv('syncDirty', d);
-  });
+  for (const c of chunks) memDirty.set(c, (memDirty.get(c) ?? 0) + 1);
+  dirtyChain = dirtyChain
+    .then(async () => {
+      const d = (await getKv<Record<string, number>>('syncDirty')) ?? {};
+      for (const c of chunks) d[c] = (d[c] ?? 0) + 1;
+      await setKv('syncDirty', d);
+    })
+    .catch(() => {
+      /* kept in memDirty; sent with the next sync */
+    });
   if (config) syncSoon();
 }
 
-async function clearDirty(snapshot: Record<string, number>) {
-  dirtyChain = dirtyChain.then(async () => {
-    const d = (await getKv<Record<string, number>>('syncDirty')) ?? {};
-    for (const [c, n] of Object.entries(snapshot)) if (d[c] === n) delete d[c];
-    await setKv('syncDirty', d);
-  });
+async function clearDirty(stored: Record<string, number>, mem: Map<string, number>) {
+  for (const [c, n] of mem) if (memDirty.get(c) === n) memDirty.delete(c);
+  dirtyChain = dirtyChain
+    .then(async () => {
+      const d = (await getKv<Record<string, number>>('syncDirty')) ?? {};
+      for (const [c, n] of Object.entries(stored)) if (d[c] === n) delete d[c];
+      await setKv('syncDirty', d);
+    })
+    .catch(() => {
+      /* the marks stay; the next sync just re-reads those chunks */
+    });
   await dirtyChain;
 }
 
@@ -158,11 +172,14 @@ export function syncNow(): Promise<void> {
   set({ state: 'syncing' });
   running = (async () => {
     await dirtyChain; // let pending change marks land first
+    const memSnapshot = new Map(memDirty);
     const [manifest, data, dev, dirtyMap] = await Promise.all([
       loadManifest(),
       loadAll(),
       deviceId(),
-      getKv<Record<string, number>>('syncDirty').then((d) => d ?? {}),
+      getKv<Record<string, number>>('syncDirty')
+        .then((d) => d ?? {})
+        .catch(() => ({}) as Record<string, number>),
     ]);
     const local: LocalState = {
       deviceId: dev,
@@ -175,11 +192,11 @@ export function syncNow(): Promise<void> {
       settingsUpdated: data.settingsUpdated,
       resetAt: data.resetAt,
       lastSeen: cfg.lastSeen,
-      dirty: Object.keys(dirtyMap),
+      dirty: [...new Set([...Object.keys(dirtyMap), ...memSnapshot.keys()])],
     };
     const r = await (await getRemote()).transact(cfg.syncId, (tx) => syncOnce(local, tx, Date.now()));
     await applySync(r);
-    await clearDirty(dirtyMap);
+    await clearDirty(dirtyMap, memSnapshot);
     if (config !== cfg) return; // turned off meanwhile
     cfg.lastSeen = r.lastSeen;
     cfg.lastSync = Date.now();

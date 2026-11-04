@@ -1117,3 +1117,17 @@ table.data td:first-child {
 .choice .kbd {
   flex: none;
 }
+
+/* ---------- game options: colour hint while typing, second try ---------- */
+.blank-input.on-track {
+  border-bottom-color: var(--good);
+  background: var(--good-soft);
+}
+.blank-input.off-track {
+  border-bottom-color: var(--bad);
+  background: var(--bad-soft);
+}
+.try-again {
+  color: var(--bad);
+  font-weight: 600;
+}
