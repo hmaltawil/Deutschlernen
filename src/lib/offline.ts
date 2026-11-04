@@ -1,8 +1,8 @@
 /** Offline mode: service worker registration, status, and saving recording bundles to the device. */
 import { registerSW } from 'virtual:pwa-register';
-import { loadManifest } from './deck';
+import { bundles } from './deck';
 import { mark } from './startup';
-import { opfsSupported, removeBundles, saveBundle, savedLevels } from './audio/recordings';
+import { opfsSupported, pruneBundles, removeBundles, saveBundle, savedLevels } from './audio/recordings';
 
 export type OfflineState = 'unsupported' | 'saving' | 'ready';
 
@@ -72,22 +72,18 @@ export function initOffline() {
   });
   pruneOldVoiceRuntime();
   dropPerRecordingCache();
-}
-
-async function bundleSizes(): Promise<Map<number, number>> {
-  const m = await loadManifest();
-  return new Map(m.levels.filter((l) => l.packBytes).map((l) => [l.n, l.packBytes!]));
+  pruneBundles();
 }
 
 export async function refreshCounts(): Promise<void> {
   try {
-    const sizes = await bundleSizes();
-    const saved = await savedLevels(sizes);
+    const all = await bundles();
+    const saved = await savedLevels(all);
     let savedBytes = 0;
     for (const b of saved.values()) savedBytes += b;
     let totalBytes = 0;
-    for (const b of sizes.values()) totalBytes += b;
-    set({ savedLevels: saved.size, totalLevels: sizes.size, savedBytes, totalBytes });
+    for (const b of all.values()) totalBytes += b.size;
+    set({ savedLevels: saved.size, totalLevels: all.size, savedBytes, totalBytes });
   } catch {
     /* ignore */
   }
@@ -101,20 +97,20 @@ export async function saveAllRecordings(): Promise<void> {
   set({ job: { done: 0, todo: 0 }, error: undefined });
   try {
     await busy; // let a background save finish first
-    const sizes = await bundleSizes();
-    const saved = await savedLevels(sizes);
-    const todo = [...sizes].filter(([lv]) => !saved.has(lv));
-    const total = todo.reduce((s, [, b]) => s + b, 0);
+    const all = await bundles();
+    const saved = await savedLevels(all);
+    const todo = [...all].filter(([lv]) => !saved.has(lv));
+    const total = todo.reduce((s, [, b]) => s + b.size, 0);
     let done = 0;
     set({ job: { done, todo: total } });
-    for (const [lv, size] of todo) {
+    for (const [, b] of todo) {
       if (cancelJob) break;
       if (!navigator.onLine) {
         set({ error: 'Stopped: no internet connection. Tap again to continue.' });
         break;
       }
-      await saveBundle(lv, size, (d) => set({ job: { done: done + d, todo: total } }));
-      done += size;
+      await saveBundle(b, (d) => set({ job: { done: done + d, todo: total } }));
+      done += b.size;
       set({ job: { done, todo: total } });
       await refreshCounts();
     }
@@ -139,11 +135,11 @@ export function ensureLevelSaved(lv: number) {
   tried.add(lv);
   busy = busy.then(async () => {
     try {
-      const size = (await bundleSizes()).get(lv);
-      if (!size) return;
-      if ((await savedLevels(new Map([[lv, size]]))).has(lv)) return;
+      const b = (await bundles()).get(lv);
+      if (!b) return;
+      if ((await savedLevels(new Map([[lv, b]]))).has(lv)) return;
       set({ background: lv });
-      await saveBundle(lv, size);
+      await saveBundle(b);
       navigator.storage?.persist?.().catch(() => {});
     } catch {
       tried.delete(lv); // try again another time

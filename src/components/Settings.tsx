@@ -119,7 +119,7 @@ export function SettingsPage({ joinCode }: { joinCode?: string }) {
   const syncing = sync.state !== 'off' && sync.state !== 'unavailable';
   const resyncAll = () => {
     if (!syncing || !manifest) return;
-    markDirty(allChunkIds(manifest.levels.map((l) => l.n)));
+    markDirty(allChunkIds(manifest.levels.map((l) => l.n), manifest.version));
     syncNow();
   };
   const voice = useVoice();

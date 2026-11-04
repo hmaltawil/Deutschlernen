@@ -6,11 +6,13 @@
  *   recordings made Safari take ~10 s to open the app).
  * - A recording is a byte range of its bundle: read from the saved file, or
  *   fetched from the website with a Range request when the bundle isn't saved.
+ * - Bundle names carry a content fingerprint, so a deck update never mixes old
+ *   and new audio; outdated bundles are deleted.
  */
-import { packName, packUrl, type Item } from '../deck';
+import { bundles, packUrl, type BundleInfo, type Item } from '../deck';
 
 const DIR = 'recordings';
-const files = new Map<number, Promise<File | null>>();
+const files = new Map<string, Promise<File | null>>();
 
 export const opfsSupported = () => typeof navigator !== 'undefined' && !!navigator.storage?.getDirectory;
 
@@ -19,59 +21,61 @@ async function dir(): Promise<FileSystemDirectoryHandle> {
   return root.getDirectoryHandle(DIR, { create: true });
 }
 
-/** The saved bundle of a level, if it is complete (size matches). */
-export function savedBundle(lv: number, expectedSize?: number): Promise<File | null> {
-  let p = files.get(lv);
+/** A saved bundle, if it is complete (size matches). */
+export function savedBundle(b: BundleInfo): Promise<File | null> {
+  let p = files.get(b.name);
   if (!p) {
     p = (async () => {
       if (!opfsSupported()) return null;
       try {
-        const f = await (await (await dir()).getFileHandle(packName(lv))).getFile();
-        return expectedSize === undefined || f.size === expectedSize ? f : null;
+        const f = await (await (await dir()).getFileHandle(b.name)).getFile();
+        return f.size === b.size ? f : null;
       } catch {
         return null;
       }
     })();
-    files.set(lv, p);
+    files.set(b.name, p);
   }
   return p;
 }
 
-export function forgetBundle(lv?: number) {
-  if (lv === undefined) files.clear();
-  else files.delete(lv);
+function forget(name?: string) {
+  if (name === undefined) files.clear();
+  else files.delete(name);
 }
 
 /** The recording of an item as an audio blob: from the saved bundle, else from the website. */
-export async function recordingBlob(item: Item, expectedSize?: number): Promise<Blob> {
-  if (!item.ap) throw new Error('no bundled recording');
+export async function recordingBlob(item: Item): Promise<Blob> {
+  const b = (await bundles()).get(item.lv);
+  if (!item.ap || !b) throw new Error('no bundled recording');
   const [off, len] = item.ap;
-  const f = await savedBundle(item.lv, expectedSize);
+  const f = await savedBundle(b);
   if (f) return f.slice(off, off + len, 'audio/mpeg');
-  const res = await fetch(packUrl(item.lv), { headers: { Range: `bytes=${off}-${off + len - 1}` } });
+  const res = await fetch(packUrl(b.name), { headers: { Range: `bytes=${off}-${off + len - 1}` } });
   if (res.status === 206) return new Blob([await res.arrayBuffer()], { type: 'audio/mpeg' });
   if (res.ok) return (await res.blob()).slice(off, off + len, 'audio/mpeg'); // server ignored Range
   throw new Error(`recording unavailable (${res.status})`);
 }
 
-/** Sizes of the complete saved bundles, by level. */
-export async function savedLevels(expected: Map<number, number>): Promise<Map<number, number>> {
+/** Levels whose bundle is completely saved, with their sizes. */
+export async function savedLevels(expected: Map<number, BundleInfo>): Promise<Map<number, number>> {
   const out = new Map<number, number>();
-  if (!opfsSupported()) return out;
-  try {
-    const d = await dir();
-    for (const [lv, size] of expected) {
-      try {
-        const f = await (await d.getFileHandle(packName(lv))).getFile();
-        if (f.size === size) out.set(lv, size);
-      } catch {
-        /* not saved */
-      }
-    }
-  } catch {
-    /* no OPFS */
-  }
+  for (const [lv, b] of expected) if (await savedBundle(b)) out.set(lv, b.size);
   return out;
+}
+
+/** Delete saved bundles that no longer belong to the current deck. */
+export async function pruneBundles(): Promise<void> {
+  if (!opfsSupported()) return;
+  try {
+    const keep = new Set([...(await bundles()).values()].map((b) => b.name));
+    const d = await dir();
+    const stale: string[] = [];
+    for await (const name of (d as unknown as { keys(): AsyncIterable<string> }).keys()) if (!keep.has(name)) stale.push(name);
+    for (const name of stale) await d.removeEntry(name);
+  } catch {
+    /* ignore */
+  }
 }
 
 let worker: Worker | null = null;
@@ -94,18 +98,18 @@ function w(): Worker {
   return worker;
 }
 
-/** Download a level's bundle into the device's storage. */
-export function saveBundle(lv: number, size: number, onProgress?: (done: number) => void): Promise<number> {
+/** Download a bundle into the device's storage. */
+export function saveBundle(b: BundleInfo, onProgress?: (done: number) => void): Promise<number> {
   const reqId = ++seq;
-  forgetBundle(lv);
+  forget(b.name);
   return new Promise<number>((resolve, reject) => {
     pending.set(reqId, { resolve, reject, onProgress });
-    w().postMessage({ reqId, url: new URL(packUrl(lv), location.href).href, name: packName(lv), size });
-  }).finally(() => forgetBundle(lv));
+    w().postMessage({ reqId, url: new URL(packUrl(b.name), location.href).href, name: b.name, size: b.size });
+  }).finally(() => forget(b.name));
 }
 
 export async function removeBundles(): Promise<void> {
-  forgetBundle();
+  forget();
   try {
     const root = await navigator.storage.getDirectory();
     await root.removeEntry(DIR, { recursive: true });

@@ -1,11 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { loadManifest, type Item, type Manifest } from './lib/deck';
-import { loadAll, saveAnswer, saveSettings } from './lib/db';
+import { loadLevel, loadManifest, type Item, type Manifest } from './lib/deck';
+import { getKv, loadAll, migrateProgress, saveAnswer, saveSettings, setKv } from './lib/db';
 import { dayKey, emptyDay, type DayStat } from './lib/scoring';
 import { MAX_STAGE, newProgress, review, type Progress } from './lib/srs';
 import { DEFAULT_SETTINGS, type Settings } from './lib/settings';
 import { piper } from './lib/audio';
-import { newer, progressChunk, sumDays } from './lib/sync/core';
+import { allChunkIds, newer, progressChunk, sumDays } from './lib/sync/core';
 import { initSync, markDirty, onSyncApplied } from './lib/sync/engine';
 import { afterFirstScreen, mark } from './lib/startup';
 
@@ -56,15 +56,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   progressRef.current = progress;
   const daysRef = useRef(ownDays);
   daysRef.current = ownDays;
+  const deckVersionRef = useRef(1);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
   const reload = useCallback(async () => {
     try {
-      const [m, data] = await Promise.all([
+      let [m, data] = await Promise.all([
         loadManifest().then((x) => (mark('sentences'), x)),
         loadAll().then((x) => (mark('progress'), x)),
       ]);
+      // deck updated since last time: re-file progress under the new levels (one time)
+      const seen = (await getKv<number>('deckVersion')) ?? 1;
+      if (seen !== m.version) {
+        if (data.progress.length) {
+          const levelOf = new Map<number, number>();
+          for (const l of m.levels) for (const it of await loadLevel(l.n)) levelOf.set(it.id, l.n);
+          await migrateProgress(levelOf);
+          data = await loadAll();
+          markDirty(allChunkIds(m.levels.map((l) => l.n), m.version));
+        }
+        await setKv('deckVersion', m.version);
+      }
+      deckVersionRef.current = m.version;
       setManifest(m);
       setProgress(new Map(data.progress.map((p) => [p.id, p])));
       setOwnDays(new Map(data.days.map((d) => [d.date, d])));
@@ -144,7 +158,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setOwnDays(ds);
     setNow(t);
     await saveAnswer(after, day);
-    markDirty([progressChunk(after.lv), 'days']);
+    markDirty([progressChunk(after.lv, deckVersionRef.current), 'days']);
     return { before, after };
   }, []);
 

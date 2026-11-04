@@ -37,6 +37,8 @@ interface Meta {
 
 export interface LocalState {
   deviceId: string;
+  /** deck version (manifest.version) */
+  deck?: number;
   levels: number[];
   progress: Progress[];
   ownDays: DayStat[];
@@ -61,7 +63,8 @@ export interface SyncResult {
   wrote: string[];
 }
 
-export const progressChunk = (lv: number) => `p${lv}`;
+/** Progress chunk id; from deck v2 on the id carries the deck version, so levels of different decks never mix. */
+export const progressChunk = (lv: number, deck = 1) => (deck > 1 ? `v${deck}p${lv}` : `p${lv}`);
 
 /* ---------- encoding (canonical, so equal data gives equal strings) ---------- */
 
@@ -165,7 +168,7 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
   const remoteReset = (meta.resetAt ?? 0) > local.resetAt;
   const localReset = local.resetAt > (meta.resetAt ?? 0);
 
-  const progressIds = local.levels.map(progressChunk);
+  const progressIds = local.levels.map((lv) => progressChunk(lv, local.deck));
   const all = [...progressIds, 'days', 'settings'];
   const dirty = new Set(local.dirty);
   const changedRemotely = (c: string) => (meta.versions[c] ?? 0) !== (local.lastSeen[c] ?? 0);
@@ -195,7 +198,7 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
     else byLevel.set(p.lv, [p]);
   }
   for (const lv of local.levels) {
-    const id = progressChunk(lv);
+    const id = progressChunk(lv, local.deck);
     if (!remote.has(id)) continue;
     const mine = byLevel.get(lv) ?? [];
     const theirsChunk = remote.get(id) ?? null;
@@ -257,7 +260,7 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
   return result;
 }
 
-export const allChunkIds = (levels: number[]) => [...levels.map(progressChunk), 'days', 'settings'];
+export const allChunkIds = (levels: number[], deck = 1) => [...levels.map((lv) => progressChunk(lv, deck)), 'days', 'settings'];
 
 /** Apply a sync result to a local snapshot (pure; the app applies the same changes to IndexedDB). */
 export function applyResult(local: LocalState, r: SyncResult, synced: string[]): LocalState {

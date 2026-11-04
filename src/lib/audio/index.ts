@@ -5,7 +5,7 @@
  *   2. on-device neural voice (Piper)
  *   3. browser speech synthesis (only if the neural voice is unavailable)
  */
-import { loadManifest, remoteAudioUrl, type Item } from '../deck';
+import { remoteAudioUrl, type Item } from '../deck';
 import { recordingBlob } from './recordings';
 import { piper } from './piper';
 import { speakSystem, stopSystem } from './webspeech';
@@ -16,11 +16,7 @@ let el: HTMLAudioElement | null = null;
 let playToken = 0;
 const clips = new Map<number, Promise<string>>(); // sentence id → object URL
 const CLIP_MAX = 30;
-let bundleSizes: Promise<Map<number, number>> | null = null;
-const sizeOf = async (lv: number) => {
-  bundleSizes ??= loadManifest().then((m) => new Map(m.levels.map((l) => [l.n, l.packBytes ?? 0])));
-  return (await bundleSizes).get(lv);
-};
+
 
 function player(): HTMLAudioElement {
   el ??= new Audio();
@@ -36,9 +32,7 @@ function clip(item: Item): Promise<string> {
     clips.set(key, hit);
     return hit;
   }
-  const p = sizeOf(item.lv)
-    .then((size) => recordingBlob(item, size))
-    .then((b) => URL.createObjectURL(b));
+  const p = recordingBlob(item).then((b) => URL.createObjectURL(b));
   p.catch(() => clips.delete(key));
   clips.set(key, p);
   while (clips.size > CLIP_MAX) {

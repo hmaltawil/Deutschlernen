@@ -67,6 +67,27 @@ describe('sync codes', () => {
   });
 });
 
+describe('deck versions', () => {
+  it('keeps v1 chunk names and gives later decks their own', async () => {
+    const { progressChunk } = await import('./core');
+    expect(progressChunk(5)).toBe('p5');
+    expect(progressChunk(5, 2)).toBe('v2p5');
+    expect(allChunkIds([1, 2], 2)).toEqual(['v2p1', 'v2p2', 'days', 'settings']);
+  });
+  it('a v2 device ignores v1 progress chunks', async () => {
+    const remote = new FakeRemote();
+    let old = device('old', { progress: [p(1, 1, 1000)] });
+    old = await sync(remote, old, 1100); // writes p1
+    let fresh = device('new', { deck: 2, dirty: allChunkIds(LEVELS, 2) });
+    fresh = await sync(remote, fresh, 1200);
+    expect(fresh.progress).toEqual([]);
+    expect(remote.docs.has('v2p1')).toBe(false); // nothing to write for an empty level
+    fresh = { ...fresh, progress: [p(7, 2, 1300)], dirty: ['v2p2'] };
+    await sync(remote, fresh, 1400);
+    expect(remote.docs.has('v2p2')).toBe(true);
+  });
+});
+
 describe('merge', () => {
   it('keeps the most recently answered record per sentence', () => {
     const m = mergeProgress([p(1, 1, 100, 2), p(2, 1, 50)], [p(1, 1, 90, 3), p(3, 1, 70)], 0);

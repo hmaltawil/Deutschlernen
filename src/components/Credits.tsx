@@ -46,9 +46,11 @@ export function Credits() {
         </p>
         <h2>How the deck is built</h2>
         <p style={{ margin: 0 }}>
-          Every German word form in Tatoeba is ranked by frequency. Each sentence teaches its rarest common word, so level 1
-          covers the most frequent words and later levels move down the list. Sentences with native-speaker audio are
-          preferred.
+          Every German word form in Tatoeba is ranked by frequency, and each sentence teaches its rarest word. Each
+          sentence also gets a difficulty score for the whole sentence: how rare the missing word and the other words
+          are, how long it is, and its grammar (subordinate and relative clauses, Konjunktiv, passive, um … zu,
+          genitive prepositions). Common words come in short, simple sentences; rarer words in longer, more complex
+          ones. Sentences with native-speaker audio are preferred.
         </p>
       </section>
     </div>

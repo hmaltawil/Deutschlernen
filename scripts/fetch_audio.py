@@ -2,7 +2,7 @@
 """Copy the deck's native-speaker recordings from Tatoeba and pack them per level.
 
 1. Downloads each recording to data/audio/<audioId>.mp3 (local cache, not published).
-2. Writes one bundle per level, public/audio/level-NN.pack (the MP3s back to back),
+2. Writes one bundle per level, public/audio/level-NN-<hash>.pack (the MP3s back to back),
    and stores each recording's [offset, length] in the deck as `ap`.
 
 Thirty bundles instead of ~11,000 files keeps offline storage fast to open on
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import bz2
+import hashlib
 import json
 import sys
 import time
@@ -76,9 +77,10 @@ def build_packs(manifest: dict) -> None:
     for lv in manifest["levels"]:
         path = DECK / lv["file"]
         items = json.loads(path.read_text(encoding="utf-8"))
-        name = f"level-{lv['n']:02d}.pack"
+        tmp_name = f"level-{lv['n']:02d}.tmp"
+        digest = hashlib.sha256()
         offset = 0
-        with open(PACKS / name, "wb") as pack:
+        with open(PACKS / tmp_name, "wb") as pack:
             for it in items:
                 it.pop("ap", None)
                 if "au" not in it:
@@ -88,8 +90,12 @@ def build_packs(manifest: dict) -> None:
                     continue  # app falls back to tatoeba.org / neural voice
                 data = src.read_bytes()
                 pack.write(data)
+                digest.update(data)
                 it["ap"] = [offset, len(data)]
                 offset += len(data)
+        # the name carries a content fingerprint, so a device never mixes old and new audio
+        name = f"level-{lv['n']:02d}-{digest.hexdigest()[:8]}.pack"
+        (PACKS / tmp_name).rename(PACKS / name)
         path.write_text(json.dumps(items, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
         lv["pack"] = name
         lv["packBytes"] = offset

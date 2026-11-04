@@ -183,3 +183,26 @@ export async function resetProgress(): Promise<void> {
     tx.done,
   ]);
 }
+
+/**
+ * After a deck update, sentences may have moved to other levels or left the deck.
+ * Re-file every progress record under its new level and drop the ones that are gone.
+ * Returns how many records changed.
+ */
+export async function migrateProgress(levelOf: Map<number, number>): Promise<number> {
+  const d = await db();
+  const tx = d.transaction('progress', 'readwrite');
+  let changed = 0;
+  for (const p of await tx.store.getAll()) {
+    const lv = levelOf.get(p.id);
+    if (lv === undefined) {
+      await tx.store.delete(p.id);
+      changed++;
+    } else if (lv !== p.lv) {
+      await tx.store.put({ ...p, lv });
+      changed++;
+    }
+  }
+  await tx.done;
+  return changed;
+}

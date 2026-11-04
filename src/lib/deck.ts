@@ -32,6 +32,12 @@ export interface LevelInfo {
   audio: number;
   minRank: number;
   maxRank: number;
+  /** typical (median) frequency rank of the missing words */
+  medianRank?: number;
+  /** average words per sentence */
+  avgWords?: number;
+  /** share of sentences with complex grammar (clauses, Konjunktiv, passive, …) */
+  complex?: number;
   /** bundle of this level's recordings, and its size */
   pack?: string;
   packBytes?: number;
@@ -92,13 +98,20 @@ export async function getItems(refs: { id: number; lv: number }[]): Promise<Item
   return refs.map((r) => byId.get(r.id)).filter((x): x is Item => !!x);
 }
 
-/** The level's recording bundle on the website. */
-export function packName(lv: number): string {
-  return `level-${String(lv).padStart(2, '0')}.pack`;
+/** A recording bundle on the website (name from the manifest; it includes a content fingerprint). */
+export function packUrl(name: string): string {
+  return `${base}audio/${name}`;
 }
 
-export function packUrl(lv: number): string {
-  return `${base}audio/${packName(lv)}`;
+export interface BundleInfo {
+  name: string;
+  size: number;
+}
+
+/** Recording bundle of each level, from the manifest. */
+export async function bundles(): Promise<Map<number, BundleInfo>> {
+  const m = await loadManifest();
+  return new Map(m.levels.filter((l) => l.pack && l.packBytes).map((l) => [l.n, { name: l.pack!, size: l.packBytes! }]));
 }
 
 /** The original on tatoeba.org — fallback if the local copy is missing. */
@@ -108,4 +121,13 @@ export function remoteAudioUrl(au: NonNullable<Item['au']>): string {
 
 export function tatoebaUrl(id: number): string {
   return `https://tatoeba.org/en/sentences/show/${id}`;
+}
+
+/** Short description of a level's difficulty, e.g. "typical word #1,200 · ~6 words · 9% complex grammar". */
+export function levelSummary(l: LevelInfo): string {
+  const parts: string[] = [];
+  if (l.medianRank) parts.push(`typical word #${l.medianRank.toLocaleString()}`);
+  if (l.avgWords) parts.push(`~${Math.round(l.avgWords)} words per sentence`);
+  if (l.complex !== undefined && l.complex >= 0.05) parts.push(`${Math.round(l.complex * 100)}% complex grammar`);
+  return parts.length ? parts.join(' · ') : `words #${l.minRank.toLocaleString()}–${l.maxRank.toLocaleString()}`;
 }

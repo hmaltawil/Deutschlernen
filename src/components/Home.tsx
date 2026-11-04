@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { streaks } from '../lib/scoring';
 import { currentLevel, type Mode } from '../lib/session';
 import { MAX_STAGE } from '../lib/srs';
+import { levelSummary } from '../lib/deck';
 import { useStore } from '../store';
 import { IconClock, IconFlame, IconHeadphones, IconKeyboard, IconList, IconPlay } from './Icons';
 import { Ring } from './Ring';
@@ -101,9 +102,7 @@ export function Home() {
         <a className="card stack" style={{ textDecoration: 'none', color: 'inherit', gap: 10 }} href={`#/levels/${lv}`}>
           <div className="spread">
             <h2>Level {lv}</h2>
-            <span className="small muted">
-              word ranks {info.minRank.toLocaleString()}–{info.maxRank.toLocaleString()}
-            </span>
+            <span className="small muted">{levelSummary(info)}</span>
           </div>
           <div className="meter" aria-label={`${played} of ${info.count} played`}>
             <span style={{ width: `${(played / info.count) * 100}%` }} />

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { loadLevel, type Item } from '../lib/deck';
+import { levelSummary, loadLevel, type Item } from '../lib/deck';
 import { mastery } from '../lib/srs';
 import { useStore } from '../store';
 import { IconArrowLeft, IconPlay } from './Icons';
@@ -12,8 +12,9 @@ export function Levels() {
       <div>
         <h1>Levels</h1>
         <p className="muted small" style={{ margin: '4px 0 0' }}>
-          {manifest.total.toLocaleString()} sentences · {manifest.words.toLocaleString()} words, most frequent first ·{' '}
-          {manifest.audio.toLocaleString()} recorded by native speakers
+          {manifest.total.toLocaleString()} sentences · {manifest.words.toLocaleString()} words ·{' '}
+          {manifest.audio.toLocaleString()} recorded by native speakers. Levels get harder in two ways: rarer missing
+          words, and longer sentences with more complex grammar.
         </p>
       </div>
       <section className="card" style={{ padding: '6px 16px' }}>
@@ -29,7 +30,7 @@ export function Levels() {
                   <span style={{ width: `${((played - done) / l.count) * 100}%` }} />
                 </div>
                 <span className="tiny muted">
-                  words #{l.minRank.toLocaleString()}–{l.maxRank.toLocaleString()} · {Math.round((l.audio / l.count) * 100)}% recorded
+                  {levelSummary(l)} · {Math.round((l.audio / l.count) * 100)}% recorded
                 </span>
               </div>
               <span className="small muted" style={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -73,7 +74,7 @@ export function LevelDetail({ n }: { n: number }) {
         <div>
           <h1>Level {n}</h1>
           <div className="small muted">
-            words #{info.minRank.toLocaleString()}–{info.maxRank.toLocaleString()} · {played}/{info.count} played
+            {levelSummary(info)} · {played}/{info.count} played
           </div>
         </div>
         <a className="btn primary" href={`#/play?kind=new&level=${n}`}>

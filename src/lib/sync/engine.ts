@@ -116,12 +116,13 @@ export async function startSync(existing?: string): Promise<string> {
   const code = existing ? normalizeCode(existing) : normalizeCode(generateCode());
   if (!code) throw new Error('That sync code is not valid. It has 24 letters and numbers.');
   changedByUser = true;
-  const levels = (await loadManifest()).levels.map((l) => l.n);
+  const manifest = await loadManifest();
+  const levels = manifest.levels.map((l) => l.n);
   config = { code: formatCode(code), syncId: await syncIdFor(code), lastSeen: {}, lastSync: 0 };
   await setKv('sync', config);
   // a reset made before joining only applied to this device
   await setKv('resetAt', 0);
-  markDirty(allChunkIds(levels));
+  markDirty(allChunkIds(levels, manifest.version));
   set({ state: 'idle', code: config.code, lastSync: 0, error: undefined });
   await syncNow();
   if (status.state === 'error') throw new Error(status.error);
@@ -165,6 +166,7 @@ export function syncNow(): Promise<void> {
     ]);
     const local: LocalState = {
       deviceId: dev,
+      deck: manifest.version,
       levels: manifest.levels.map((l) => l.n),
       progress: data.progress,
       ownDays: data.days,
