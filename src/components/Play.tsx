@@ -256,13 +256,22 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
   const answered = verdict !== null;
   const [known, setKnown] = useState(false);
   const [beforeKnown, setBeforeKnown] = useState<Progress | null>(null);
+  const answerSaved = useRef<Promise<unknown> | null>(null);
+  const knownBusy = useRef(false);
   const toggleKnown = useCallback(async () => {
-    if (!known) {
-      setKnown(true);
-      setBeforeKnown(await onKnown(true, null));
-    } else {
-      setKnown(false);
-      await onKnown(false, beforeKnown);
+    if (knownBusy.current) return;
+    knownBusy.current = true;
+    try {
+      await answerSaved.current; // K right after answering: wait until the answer is stored
+      if (!known) {
+        setKnown(true);
+        setBeforeKnown(await onKnown(true, null));
+      } else {
+        setKnown(false);
+        await onKnown(false, beforeKnown);
+      }
+    } finally {
+      knownBusy.current = false;
     }
   }, [known, beforeKnown, onKnown]);
   const opts = useMemo(() => choices(item), [item]);
@@ -296,7 +305,9 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
       setRevealed(true);
       if (fromChoice) setChosen(value);
       const used: Mode = mode === 'listen' && revealedEarly ? 'text' : mode;
-      const res = await onAnswer(v === 'correct', value, hint, used);
+      const saving = onAnswer(v === 'correct', value, hint, used);
+      answerSaved.current = saving;
+      const res = await saving;
       setOutcome(res);
       if (settings.autoplay) speak();
     },
@@ -326,7 +337,7 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
       } else if (!inField && (e.key === 'r' || e.key === 'R')) {
         e.preventDefault();
         s.speak();
-      } else if (!inField && s.answered && s.outcome && (e.key === 'k' || e.key === 'K')) {
+      } else if (!inField && s.answered && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         s.toggleKnown();
       }
