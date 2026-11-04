@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { levelSummary, loadLevel, type Item } from '../lib/deck';
-import { mastery, shownStage } from '../lib/srs';
 import { currentLevel } from '../lib/session';
 import { useStore } from '../store';
 import { IconArrowLeft, IconCheck, IconPlay, IconReset } from './Icons';
 import { confirmResetLevel } from './LevelCard';
+import { SentenceRow } from './SentenceRow';
 import { useSync } from './Sync';
 import { statOf } from '../lib/levels';
 
@@ -57,11 +57,10 @@ export function Levels() {
   );
 }
 
-const STAGE_COLOR = ['var(--m0)', 'var(--m1)', 'var(--m2)', 'var(--m3)', 'var(--m4)'];
-type Filter = 'all' | 'played' | 'unplayed' | 'known';
+type Filter = 'all' | 'played' | 'unplayed' | 'known' | 'favourites';
 
 export function LevelDetail({ n }: { n: number }) {
-  const { manifest, progress, playedPerLevel, setKnown, levelStats, homeLevels, pinLevels, resetLevel } = useStore();
+  const { manifest, progress, playedPerLevel, levelStats, homeLevels, pinLevels, resetLevel, favoriteIds } = useStore();
   const sync = useSync();
   const syncing = sync.state !== 'off' && sync.state !== 'unavailable';
   const [msg, setMsg] = useState('');
@@ -81,9 +80,11 @@ export function LevelDetail({ n }: { n: number }) {
           ? progress.has(it.id)
           : filter === 'known'
             ? !!progress.get(it.id)?.known
-            : !progress.has(it.id),
+            : filter === 'favourites'
+              ? favoriteIds.has(it.id)
+              : !progress.has(it.id),
     );
-  }, [items, filter, progress]);
+  }, [items, filter, progress, favoriteIds]);
   const info = manifest?.levels.find((l) => l.n === n);
   if (!info) return <div className="card">No such level.</div>;
   const played = playedPerLevel.get(n) ?? 0;
@@ -132,9 +133,9 @@ export function LevelDetail({ n }: { n: number }) {
         </p>
       )}
       <div className="seg" role="group" aria-label="Filter sentences">
-        {(['all', 'played', 'unplayed', 'known'] as Filter[]).map((f) => (
-          <button key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>
-            {f[0].toUpperCase() + f.slice(1)}
+        {(['all', 'played', 'unplayed', 'known', 'favourites'] as Filter[]).map((f) => (
+          <button key={f} aria-pressed={filter === f} onClick={() => setFilter(f)} aria-label={f === 'favourites' ? 'Favourites' : undefined}>
+            {f === 'favourites' ? '★' : f[0].toUpperCase() + f.slice(1)}
           </button>
         ))}
       </div>
@@ -144,37 +145,7 @@ export function LevelDetail({ n }: { n: number }) {
         ) : shown.length === 0 ? (
           <p className="muted">Nothing here yet.</p>
         ) : (
-          shown.slice(0, limit).map((it) => {
-            const p = progress.get(it.id);
-            return (
-              <div key={it.id} className="sent-row">
-                <span
-                  className="dot"
-                  style={{ background: p ? STAGE_COLOR[shownStage(p)] : 'transparent', border: p ? 0 : '1.5px solid var(--line)' }}
-                  title={p ? (p.known ? 'Known' : `${mastery(p.stage)}% mastered`) : 'Not played yet'}
-                />
-                <div>
-                  <div className="de" lang="de">
-                    {it.de.slice(0, it.c[0])}
-                    <b>{it.a}</b>
-                    {it.de.slice(it.c[1])}
-                  </div>
-                  <div className="small muted">
-                    {it.en}
-                    {it.au ? ' · native audio' : ''}
-                  </div>
-                  {p?.known && (
-                    <div className="row" style={{ gap: 8, marginTop: 4 }}>
-                      <span className="badge">known · not reviewed</span>
-                      <button className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} onClick={() => setKnown(it.id, false)}>
-                        Review again
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })
+          shown.slice(0, limit).map((it) => <SentenceRow key={it.id} item={it} />)
         )}
       </section>
       {shown.length > limit && (

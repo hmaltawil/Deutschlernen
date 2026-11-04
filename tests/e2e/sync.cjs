@@ -102,6 +102,20 @@ async function syncNowAndWait(page) {
   ok(await A.page.isChecked('#second-try'), 'a game option changed on B shows up on A');
   ok((await A.page.evaluate(() => document.documentElement.dataset.theme)) !== 'dark', 'the theme chosen on B stays on B');
 
+  // a favourite starred on A shows up on B
+  await A.page.goto(URL0 + '#/levels/2');
+  await A.page.waitForSelector('.sent-row .star-toggle');
+  const starredId = await A.page.$eval('.sent-row', (e) => e.dataset.id);
+  await A.page.click('.sent-row .star-toggle');
+  await A.page.waitForTimeout(500);
+  await A.page.goto(URL0 + '#/settings');
+  await syncNowAndWait(A.page);
+  await B.page.goto(URL0 + '#/settings');
+  await syncNowAndWait(B.page);
+  await B.page.goto(URL0 + '#/list/fav');
+  await B.page.waitForSelector('.sent-row', { timeout: 10000 }).catch(() => {});
+  ok((await B.page.$$eval('.sent-row', (rs) => rs.map((r) => r.dataset.id))).includes(starredId), 'a favourite starred on A shows up on B');
+
   // a round finished on A reaches B automatically (sync at end of round + on focus)
   await playRound(A.page, 'kind=new&level=3', 5);
   await A.page.waitForTimeout(3000);

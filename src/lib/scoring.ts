@@ -1,7 +1,7 @@
 /** Points, daily stats, goals and streaks. */
 import type { Mode } from './session';
 
-export const BASE_POINTS: Record<Mode, number> = { mc: 4, text: 8, listen: 10 };
+export const BASE_POINTS: Record<Mode, number> = { mc: 4, text: 8, listen: 10, dictation: 12 };
 export const COMBO_STEP = 0.1;
 export const COMBO_CAP = 5;
 

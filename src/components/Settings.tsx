@@ -235,6 +235,13 @@ export function SettingsPage({ joinCode }: { joinCode?: string }) {
       <section className="card" data-testid="game-options">
         <h2>While you answer</h2>
         <div className="field">
+          <label htmlFor="word-info">Word info after answering</label>
+          <Toggle id="word-info" checked={settings.wordInfo} onChange={(v) => updateSettings({ wordInfo: v })} />
+          <span className="hint">
+            The missing word’s base form, der/die/das and plural, verb forms and English meaning, from Wiktionary.
+          </span>
+        </div>
+        <div className="field">
           <label htmlFor="hint">Show English translation</label>
           <Toggle id="hint" checked={settings.showHint} onChange={(v) => updateSettings({ showHint: v })} />
           <span className="hint">Shown under the sentence while you answer. After answering it is always shown.</span>
@@ -288,6 +295,11 @@ export function SettingsPage({ joinCode }: { joinCode?: string }) {
         <div className="field">
           <label htmlFor="autoplay">Play audio after each answer</label>
           <Toggle id="autoplay" checked={settings.autoplay} onChange={(v) => updateSettings({ autoplay: v })} />
+        </div>
+        <div className="field">
+          <label htmlFor="loop-audio">Loop audio</label>
+          <Toggle id="loop-audio" checked={settings.loopAudio} onChange={(v) => updateSettings({ loopAudio: v })} />
+          <span className="hint">Repeat the sentence with a short pause until you go on — for speaking along with it.</span>
         </div>
         <div className="field">
           <label htmlFor="rate">Speed</label>

@@ -34,6 +34,10 @@ export interface Settings {
   secondTry: boolean;
   /** Type/Listen: buttons for ä, ö, ü, ß under the sentence (for keyboards without them; per device) */
   umlautButtons: boolean;
+  /** after answering: base form, der/die/das, plural and meaning of the missing word (Wiktionary) */
+  wordInfo: boolean;
+  /** repeat the sentence with a short pause until you go on (for speaking along) */
+  loopAudio: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -53,6 +57,8 @@ export const DEFAULT_SETTINGS: Settings = {
   strictUmlauts: false,
   secondTry: false,
   umlautButtons: false,
+  wordInfo: true,
+  loopAudio: false,
 };
 
 /**

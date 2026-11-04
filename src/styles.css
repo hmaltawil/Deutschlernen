@@ -786,7 +786,7 @@ h3 {
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
   display: grid;
-  grid-template-columns: 12px 1fr;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
   gap: 12px;
 }
 .sent-row:last-child {
@@ -1261,4 +1261,120 @@ table.data td:first-child {
 .menu > button:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* ---------- word info after an answer ---------- */
+.word-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.word-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.word-head {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.word-pos {
+  font-size: 0.75rem;
+  color: var(--muted);
+  flex: none;
+}
+.word-meaning {
+  font-size: 0.98rem;
+}
+.word-link {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+/* ---------- favourites ---------- */
+.star-btn.on {
+  color: var(--gap);
+}
+.star-toggle {
+  border: 0;
+  background: none;
+  padding: 4px;
+  margin: -4px -4px 0 0;
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+  border-radius: 8px;
+}
+.star-toggle.on {
+  color: var(--gap);
+}
+.list-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.list-row:last-child {
+  border-bottom: 0;
+}
+.list-row .list-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--gap);
+}
+.list-row .list-icon.missed {
+  color: var(--bad);
+}
+
+/* ---------- dictation ---------- */
+.dict-input {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  line-height: 1.4;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.dict-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.dict-bad {
+  color: var(--bad);
+  background: var(--bad-soft);
+  border-radius: 4px;
+  padding: 0 2px;
+  font-weight: 650;
+}
+
+/* answer modes: 4 in a row, 2 × 2 on phones */
+.seg.mode-seg {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.seg.mode-seg button {
+  justify-content: center;
+}
+@media (max-width: 520px) {
+  .seg.mode-seg {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

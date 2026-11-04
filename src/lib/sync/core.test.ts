@@ -72,7 +72,7 @@ describe('deck versions', () => {
     const { progressChunk } = await import('./core');
     expect(progressChunk(5)).toBe('p5');
     expect(progressChunk(5, 2)).toBe('v2p5');
-    expect(allChunkIds([1, 2], 2)).toEqual(['v2p1', 'v2p2', 'days', 'settings']);
+    expect(allChunkIds([1, 2], 2)).toEqual(['v2p1', 'v2p2', 'days', 'settings', 'favs']);
   });
   it('a v2 device ignores v1 progress chunks', async () => {
     const remote = new FakeRemote();
@@ -255,11 +255,29 @@ describe('two devices', () => {
     expect(ids(B)).toEqual([1]);
   });
 
+  it('favourites sync both ways; the latest star or unstar wins', async () => {
+    const remote = new FakeRemote();
+    let A = device('A', { favorites: { 10: [1, 1000, 3], 11: [1, 1000, 3] } });
+    let B = device('B', { favorites: { 12: [1, 1500, 7] } });
+    A = await sync(remote, A, 2000);
+    B = await sync(remote, B, 2100);
+    expect(Object.keys(B.favorites!).sort()).toEqual(['10', '11', '12']);
+    // B unstars 10 later; A stars 12 again earlier (offline) — B's newer removal and A's older star
+    B = { ...B, favorites: { ...B.favorites!, 10: [0, 3000, 3] }, dirty: ['favs'] };
+    A = { ...A, favorites: { ...A.favorites!, 13: [1, 2500, 1] }, dirty: ['favs'] };
+    B = await sync(remote, B, 3100);
+    A = await sync(remote, A, 3200);
+    B = await sync(remote, B, 3300);
+    const on = (d: LocalState) => Object.entries(d.favorites!).filter(([, v]) => v[0]).map(([k]) => k).sort();
+    expect(on(A)).toEqual(['11', '12', '13']);
+    expect(on(B)).toEqual(['11', '12', '13']);
+  });
+
   it('local answers made while a sync was running are not overwritten', () => {
     const before = device('A', { progress: [p(1, 1, 1000, 1)] });
     const result = {
       progressPut: [p(1, 1, 900, 3)], progressDelete: [], ownDays: null, otherDays: {}, settings: null,
-      resetAt: 0, levelResets: {}, dropBefore: {}, lastSeen: {}, wrote: [],
+      resetAt: 0, levelResets: {}, dropBefore: {}, lastSeen: {}, wrote: [], favorites: null,
     };
     const after = applyResult({ ...before, progress: [p(1, 1, 2000, 2)] }, result, []);
     expect(after.progress[0].stage).toBe(2);

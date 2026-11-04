@@ -4,16 +4,18 @@ import type { Mode } from '../lib/session';
 import { isMastered } from '../lib/srs';
 import { statOf } from '../lib/levels';
 import { useStore } from '../store';
-import { IconClock, IconFlame, IconHeadphones, IconKeyboard, IconList, IconPlay } from './Icons';
+import { IconClock, IconFlame, IconHeadphones, IconKeyboard, IconList, IconPen, IconPlay } from './Icons';
 import { Ring } from './Ring';
 import { VoiceBanner } from './VoiceBanner';
 import { LevelCard } from './LevelCard';
+import { ListsCard } from './Lists';
 import { useSync } from './Sync';
 
 export const MODES: { id: Mode; label: string; desc: string; icon: JSX.Element }[] = [
   { id: 'mc', label: 'Choose', desc: 'Pick the missing word from four options · 4 pts', icon: <IconList size={16} /> },
   { id: 'text', label: 'Type', desc: 'Type the missing word yourself · 8 pts', icon: <IconKeyboard size={16} /> },
   { id: 'listen', label: 'Listen', desc: 'Hear the sentence, then type the missing word · 10 pts', icon: <IconHeadphones size={16} /> },
+  { id: 'dictation', label: 'Dictate', desc: 'Hear the sentence, then write all of it · 12 pts', icon: <IconPen size={16} /> },
 ];
 
 export function ModePicker() {
@@ -21,7 +23,7 @@ export function ModePicker() {
   const mode = MODES.find((m) => m.id === settings.mode) ?? MODES[0];
   return (
     <div className="stack" style={{ gap: 6 }}>
-      <div className="seg" role="group" aria-label="Answer mode">
+      <div className="seg mode-seg" role="group" aria-label="Answer mode">
         {MODES.map((m) => (
           <button key={m.id} aria-pressed={settings.mode === m.id} onClick={() => updateSettings({ mode: m.id })}>
             {m.icon}
@@ -114,6 +116,11 @@ export function Home() {
             No levels here. Open <a href="#/levels">Levels</a> and play one — levels you play show up here.
           </div>
         )}
+      </section>
+
+      <section className="stack" style={{ gap: 12 }}>
+        <h2>Your lists</h2>
+        <ListsCard />
       </section>
 
       <section className="tiles">

@@ -6,6 +6,7 @@
  *   p1 … p30  progress of one deck level: [[id, stage, due, correct, wrong, first, last], …]
  *   days      daily stats per device: { deviceId: [[date, points, correct, wrong, learned, reviewed], …] }
  *   settings  { updated, value }
+ *   favs      favourite sentences: { id: [on 0/1, changed ms, level] }
  *
  * Merge rules
  *   progress  per sentence, the most recently answered record wins
@@ -13,6 +14,7 @@
  *   settings  the most recently changed copy wins (device-only settings are never taken from it)
  *   reset     "reset progress" stores resetAt; anything older is dropped everywhere
  *   level     "reset level" stores levelResets[chunk]; older answers in that level are dropped
+ *   favs      per sentence the latest change (star / unstar) wins
  */
 import type { DayStat } from '../scoring';
 import { deviceSettings, type Settings } from '../settings';
@@ -38,6 +40,20 @@ interface Meta {
   levelResets?: Record<string, number>;
 }
 
+/** Favourite sentences: id → [on (1) / off (0), when it changed (ms), level]. Off entries are kept so removals sync. */
+export type Favorites = Record<string, [0 | 1, number, number]>;
+
+/** Per sentence the most recent change wins. */
+export function mergeFavorites(a: Favorites, b: Favorites): Favorites {
+  const out: Favorites = { ...a };
+  for (const [id, v] of Object.entries(b)) if (!out[id] || v[1] > out[id][1]) out[id] = v;
+  return out;
+}
+
+export function encodeFavorites(f: Favorites): string {
+  return JSON.stringify(Object.fromEntries(Object.keys(f).sort((x, y) => Number(x) - Number(y)).map((k) => [k, f[k]])));
+}
+
 export interface LocalState {
   deviceId: string;
   /** deck version (manifest.version) */
@@ -51,6 +67,7 @@ export interface LocalState {
   resetAt: number;
   /** level resets this device knows about (progress chunk id → time) */
   levelResets?: Record<string, number>;
+  favorites?: Favorites;
   lastSeen: Record<string, number>;
   dirty: string[];
 }
@@ -63,6 +80,8 @@ export interface SyncResult {
   otherDays: Record<string, DayStat[]>;
   /** newer settings from another device */
   settings: { value: Settings; updated: number } | null;
+  /** favourites after merging, if they changed */
+  favorites: Favorites | null;
   resetAt: number;
   /** every level reset known after this sync (progress chunk id → time) */
   levelResets: Record<string, number>;
@@ -188,7 +207,7 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
   const metaMissesLevelResets = Object.entries(levelResets).some(([c, t]) => (remoteLR[c] ?? 0) !== t);
 
   const progressIds = local.levels.map((lv) => progressChunk(lv, local.deck));
-  const all = [...progressIds, 'days', 'settings'];
+  const all = [...progressIds, 'days', 'settings', 'favs'];
   const dirty = new Set(local.dirty);
   const changedRemotely = (c: string) => (meta.versions[c] ?? 0) !== (local.lastSeen[c] ?? 0);
   const toRead = all.filter((c) => remoteReset || localReset || dirty.has(c) || changedRemotely(c) || levelResetDiffers(c));
@@ -203,6 +222,7 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
     ownDays: null,
     otherDays: local.otherDays,
     settings: null,
+    favorites: null,
     resetAt,
     levelResets,
     dropBefore: {},
@@ -270,6 +290,16 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
     }
   }
 
+  // favourites
+  if (remote.has('favs')) {
+    const theirsChunk = remote.get('favs') ?? null;
+    const mine = local.favorites ?? {};
+    const merged = mergeFavorites(mine, theirsChunk ? (JSON.parse(theirsChunk.data) as Favorites) : {});
+    const enc = encodeFavorites(merged);
+    if (enc !== encodeFavorites(mine)) result.favorites = merged;
+    if (theirsChunk ? theirsChunk.data !== enc : Object.keys(merged).length > 0) writes.push(['favs', enc]);
+  }
+
   // write changed chunks and the new versions
   if (writes.length || localReset || metaMissesLevelResets) {
     const versions = { ...meta.versions };
@@ -285,7 +315,7 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
   return result;
 }
 
-export const allChunkIds = (levels: number[], deck = 1) => [...levels.map((lv) => progressChunk(lv, deck)), 'days', 'settings'];
+export const allChunkIds = (levels: number[], deck = 1) => [...levels.map((lv) => progressChunk(lv, deck)), 'days', 'settings', 'favs'];
 
 /** Apply a sync result to a local snapshot (pure; the app applies the same changes to IndexedDB). */
 export function applyResult(local: LocalState, r: SyncResult, synced: string[]): LocalState {
@@ -302,6 +332,7 @@ export function applyResult(local: LocalState, r: SyncResult, synced: string[]):
     otherDays: r.otherDays,
     settings: r.settings ? r.settings.value : local.settings,
     settingsUpdated: r.settings ? r.settings.updated : local.settingsUpdated,
+    favorites: r.favorites ?? local.favorites,
     resetAt: r.resetAt,
     levelResets: r.levelResets,
     lastSeen: r.lastSeen,

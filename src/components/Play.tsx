@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { checkAnswer, onTrack, type Verdict } from '../lib/answer';
+import { checkAnswer, checkDictation, DICT_WORD, onTrack, type DictationResult, type DictWord, type Verdict } from '../lib/answer';
 import { getItems, loadLevel, tatoebaUrl, type Item } from '../lib/deck';
 import { pointsFor } from '../lib/scoring';
 import { choices, currentLevel, makeCards, pickNew, pickReviews, requeue, type Card, type Mode, type RoundKind } from '../lib/session';
@@ -8,10 +8,13 @@ import { piper, play, preload, stop, plannedSource, type Source } from '../lib/a
 import { VOICES, type Settings } from '../lib/settings';
 import { useStore } from '../store';
 import { go } from '../router';
-import { IconCheck, IconPlay, IconVolume, IconX } from './Icons';
+import { IconCheck, IconPlay, IconStar, IconVolume, IconX } from './Icons';
 import { Ring } from './Ring';
 import { syncSoon } from '../lib/sync/engine';
 import { applyUpdateIfReady, ensureLevelSaved } from '../lib/offline';
+import { loadWords } from '../lib/words';
+import { favoriteRefs, oftenMissed } from '../lib/lists';
+import { WordBox } from './WordBox';
 
 interface Outcome {
   points: number;
@@ -61,6 +64,21 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
     (async () => {
       const now = Date.now();
       const prog = progressRef.current;
+      if (kind === 'fav' || kind === 'missed') {
+        // a practice list: its sentences, least recently played first
+        const refs = kind === 'fav' ? favoriteRefs(store.favorites, prog) : oftenMissed(prog.values());
+        const items = await getItems(refs.slice(0, settings.roundSize));
+        if (cancelled) return;
+        const c = items.map((item) => ({ item, isNew: !prog.has(item.id), retry: false }));
+        setCards(c);
+        setIdx(0);
+        setResults([]);
+        setCombo(0);
+        setPhase(c.length ? 'playing' : 'empty');
+        piper.warm(settings.voice);
+        if (settings.wordInfo) for (const lv of new Set(c.map((x) => x.item.lv))) loadWords(lv).catch(() => {});
+        return;
+      }
       // with a level: only that level's reviews and new sentences
       const pool = level ? [...prog.values()].filter((p) => p.lv === level) : prog.values();
       const reviews = pickReviews(pool, now, settings.roundSize, kind);
@@ -79,6 +97,8 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
       setCombo(0);
       setPhase(c.length ? 'playing' : 'empty');
       piper.warm(settings.voice);
+      // word info for these levels, ready by the time you answer
+      if (settings.wordInfo) for (const lv of new Set(c.map((x) => x.item.lv))) loadWords(lv).catch(() => {});
       // keep this level's recordings on the device for offline use
       if (settings.autoSaveRecordings) for (const lv of new Set(fresh.map((x) => x.lv))) ensureLevelSaved(lv);
     })().catch((e) => {
@@ -141,6 +161,23 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
 
   if (phase === 'loading') return <div className="spinner" aria-label="Loading" />;
   if (phase === 'error') return <div className="card">Could not load sentences: {err}</div>;
+  if (phase === 'empty' && (kind === 'fav' || kind === 'missed')) {
+    return (
+      <div className="card stack center">
+        <h2>{kind === 'fav' ? 'No favourites yet' : 'Nothing often missed'}</h2>
+        <p className="muted">
+          {kind === 'fav'
+            ? 'Tap the star on a sentence to save it here.'
+            : 'Sentences you get wrong at least twice show up here until you reach 75% on them.'}
+        </p>
+        <div className="row" style={{ justifyContent: 'center' }}>
+          <a className="btn" href="#/">
+            Home
+          </a>
+        </div>
+      </div>
+    );
+  }
   if (phase === 'empty') {
     const where = level ? ` in Level ${level}` : '';
     const due = level ? (store.levelStats.get(level)?.due ?? 0) : 0;
@@ -204,6 +241,8 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
         onNext={onNext}
         isLast={idx + 1 >= cards.length}
         stage={store.progress.get(card.item.id)?.stage ?? 0}
+        fav={store.favoriteIds.has(card.item.id)}
+        onFav={() => store.toggleFavorite(card.item.id, card.item.lv)}
       />
     </div>
   );
@@ -219,6 +258,25 @@ function Masked({ text }: { text: string }) {
   for (const m of text.matchAll(WORD)) {
     if (m.index! > last) parts.push(<span key={`s${last}`}>{text.slice(last, m.index)}</span>);
     parts.push(<span key={m.index} className="mask-word" style={{ width: `${m[0].length * 0.5}em` }} />);
+    last = m.index! + m[0].length;
+  }
+  if (last < text.length) parts.push(<span key={`s${last}`}>{text.slice(last)}</span>);
+  return <>{parts}</>;
+}
+
+/** The sentence after a dictation: words you got right as usual, missed ones in red. */
+function DictSentence({ text, words }: { text: string; words: DictWord[] }) {
+  const parts: JSX.Element[] = [];
+  let last = 0;
+  let k = 0;
+  for (const m of text.matchAll(DICT_WORD)) {
+    if (m.index! > last) parts.push(<span key={`s${last}`}>{text.slice(last, m.index)}</span>);
+    parts.push(
+      <span key={m.index} className={words[k]?.ok ? 'dict-ok' : 'dict-bad'}>
+        {m[0]}
+      </span>,
+    );
+    k++;
     last = m.index! + m[0].length;
   }
   if (last < text.length) parts.push(<span key={`s${last}`}>{text.slice(last)}</span>);
@@ -255,16 +313,22 @@ interface CardProps {
   /** mark as known (or undo); resolves with the record from before the change */
   onKnown(known: boolean, restore: Progress | null): Promise<Progress | null>;
   onNext(): void;
+  /** this sentence is a favourite */
+  fav: boolean;
+  onFav(): void;
 }
 
-function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onNext }: CardProps) {
+function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onNext, fav, onFav }: CardProps) {
   const { item } = card;
   const [startStage] = useState(stage);
   const [given, setGiven] = useState('');
   const [chosen, setChosen] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [hint, setHint] = useState(false);
-  const [revealed, setRevealed] = useState(mode !== 'listen');
+  const dictation = mode === 'dictation';
+  const [revealed, setRevealed] = useState(mode !== 'listen' && !dictation);
+  const [dict, setDict] = useState<DictationResult | null>(null);
+  const areaRef = useRef<HTMLTextAreaElement>(null);
   const [revealedEarly, setRevealedEarly] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [source, setSource] = useState<Source | null>(null);
@@ -303,35 +367,63 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
   const after = item.de.slice(item.c[1]);
   const typing = mode === 'text' || mode === 'listen';
   // Choose/Type: hearing the sentence before answering gives the missing word away (setting)
-  const canHear = answered || mode === 'listen' || settings.audioBeforeAnswer;
+  const canHear = answered || mode === 'listen' || dictation || settings.audioBeforeAnswer;
   const strict = settings.strictUmlauts;
 
+  // "Loop audio": after the sentence ends, play it again after a pause until you go on or stop
+  const loopGen = useRef(0);
+  const alive = useRef(true);
+  const canHearRef = useRef(canHear);
+  canHearRef.current = canHear;
+  const [looping, setLooping] = useState(false);
+  useEffect(
+    () => () => {
+      alive.current = false;
+      loopGen.current++;
+    },
+    [],
+  );
+  const speakRef = useRef<() => void>(() => {});
   const speak = useCallback(async () => {
+    const gen = ++loopGen.current;
     try {
       const src = await play(item, settings.rate, settings.voice, setSource);
       if (src) setSource(src);
       setBlocked(false);
+      if (src && settings.loopAudio && alive.current && gen === loopGen.current && canHearRef.current) {
+        setLooping(true);
+        setTimeout(() => alive.current && gen === loopGen.current && speakRef.current(), 1200);
+      }
     } catch {
       setBlocked(true); // autoplay was blocked: show a big play button
     }
-  }, [item, settings.rate, settings.voice]);
+  }, [item, settings.rate, settings.voice, settings.loopAudio]);
+  speakRef.current = speak;
+  const stopLoop = () => {
+    loopGen.current++;
+    stop();
+    setLooping(false);
+  };
 
   useEffect(() => {
-    if (mode === 'listen') speak();
+    if (mode === 'listen' || dictation) speak();
     else setSource(plannedSource(item));
     if (typing) inputRef.current?.focus({ preventScroll: true });
+    if (dictation) areaRef.current?.focus({ preventScroll: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const submit = useCallback(
     async (value: string, fromChoice: boolean, giveUp = false) => {
       if (verdict) return;
-      const v: Verdict = fromChoice ? (value === item.a ? 'correct' : 'wrong') : checkAnswer(value, item.a, { strict });
+      const d = dictation ? checkDictation(value, item.de, { strict }) : null;
+      const v: Verdict = d ? d.verdict : fromChoice ? (value === item.a ? 'correct' : 'wrong') : checkAnswer(value, item.a, { strict });
       if (v === 'close' && !giveUp && settings.secondTry && !secondChance) {
         setSecondChance(true); // one letter off: let them fix it (counts as right for half points)
-        inputRef.current?.focus();
+        (dictation ? areaRef.current : inputRef.current)?.focus();
         return;
       }
+      setDict(d);
       answeredAt.current = performance.now();
       setVerdict(v);
       setRevealed(true);
@@ -344,7 +436,7 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
       answerSaved.current = res.saved.catch(() => {});
       res.saved.catch(() => setSaveError(true));
     },
-    [verdict, item.a, mode, revealedEarly, hint, onAnswer, settings.autoplay, settings.secondTry, speak, strict, secondChance],
+    [verdict, item.a, item.de, mode, dictation, revealedEarly, hint, onAnswer, settings.autoplay, settings.secondTry, speak, strict, secondChance],
   );
 
   useEffect(() => {
@@ -352,8 +444,8 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
   }, [answered]);
 
   // keyboard: 1–4 choose, Enter next, R replay
-  const keyState = useRef({ answered, opts, submit, onNext, speak, mode, toggleKnown, outcome, canHear });
-  keyState.current = { answered, opts, submit, onNext, speak, mode, toggleKnown, outcome, canHear };
+  const keyState = useRef({ answered, opts, submit, onNext, speak, mode, toggleKnown, outcome, canHear, onFav });
+  keyState.current = { answered, opts, submit, onNext, speak, mode, toggleKnown, outcome, canHear, onFav };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = keyState.current;
@@ -373,6 +465,9 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
       } else if (!inField && s.answered && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         s.toggleKnown();
+      } else if (!inField && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        s.onFav();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -380,7 +475,7 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
   }, []);
 
   const insert = (ch: string) => {
-    const el = inputRef.current;
+    const el = dictation ? areaRef.current : inputRef.current;
     if (!el || answered) return;
     const start = el.selectionStart ?? given.length;
     const end = el.selectionEnd ?? given.length;
@@ -456,6 +551,7 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
             #{item.r.toLocaleString()}
           </span>
         </div>
+        <div className="row" style={{ gap: 2 }}>
         <button
           type="button"
           className="btn ghost icon-btn"
@@ -468,17 +564,38 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
         >
           <IconVolume />
         </button>
+        <button
+          type="button"
+          className={`btn ghost icon-btn star-btn${fav ? ' on' : ''}`}
+          onClick={onFav}
+          aria-pressed={fav}
+          aria-label={fav ? 'Remove from favourites (F)' : 'Add to favourites (F)'}
+          title={fav ? 'Favourite (F)' : 'Add to favourites (F)'}
+        >
+          <IconStar filled={fav} />
+        </button>
+        </div>
       </div>
 
       <div className="sentence" lang="de">
-        {revealed ? before : <Masked text={before} />}
-        {gap}
-        {revealed ? after : <Masked text={after} />}
+        {dictation ? (
+          answered && dict ? (
+            <DictSentence text={item.de} words={dict.expected} />
+          ) : (
+            <Masked text={item.de} />
+          )
+        ) : (
+          <>
+            {revealed ? before : <Masked text={before} />}
+            {gap}
+            {revealed ? after : <Masked text={after} />}
+          </>
+        )}
       </div>
 
       {(settings.showHint || answered) && <div className="translation">{item.en}</div>}
 
-      {mode === 'listen' && !answered && (
+      {(mode === 'listen' || dictation) && !answered && (
         <div className="row" style={{ marginTop: 14 }}>
           {blocked ? (
             <button type="button" className="btn primary" onClick={speak}>
@@ -489,7 +606,12 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
               <IconVolume size={18} /> Replay
             </button>
           )}
-          {!revealed && (
+          {looping && (
+            <button type="button" className="btn ghost" onClick={stopLoop}>
+              Stop
+            </button>
+          )}
+          {!revealed && !dictation && (
             <button
               type="button"
               className="btn ghost"
@@ -519,8 +641,30 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
         </div>
       )}
 
-      {typing && !answered && (
+      {(typing || dictation) && !answered && (
         <div className="stack" style={{ marginTop: 18, gap: 12 }}>
+          {dictation && (
+            <textarea
+              ref={areaRef}
+              className="dict-input"
+              rows={3}
+              value={given}
+              onChange={(e) => setGiven(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (given.trim()) submit(given, false);
+                }
+              }}
+              placeholder="Write the sentence you hear"
+              aria-label="The sentence"
+              lang="de"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="done"
+            />
+          )}
           {secondChance && (
             <div className="try-again small" role="status">
               Almost! Check the spelling and try again.
@@ -537,9 +681,11 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
               </div>
             )}
             <div className="row" style={{ gap: 6 }}>
-              <button type="button" className="btn ghost" onClick={useHint} disabled={hint}>
-                Hint
-              </button>
+              {!dictation && (
+                <button type="button" className="btn ghost" onClick={useHint} disabled={hint}>
+                  Hint
+                </button>
+              )}
               <button type="button" className="btn ghost" onClick={() => submit(given, false, true)}>
                 Don’t know
               </button>
@@ -558,6 +704,10 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
               <span className="verdict ok">
                 <IconCheck /> Richtig!
               </span>
+            ) : dictation ? (
+              <span className="verdict bad">
+                <IconX /> {verdict === 'close' ? 'Almost — one word is misspelled' : given ? 'Not quite — the words in red were missed' : 'This is the sentence'}
+              </span>
             ) : (
               <span className="verdict bad">
                 <IconX /> {verdict === 'close' ? 'Almost — check the spelling:' : given || chosen ? 'Not quite — it’s' : 'The answer is'}{' '}
@@ -566,9 +716,21 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
             )}
             {outcome && outcome.points > 0 && <span className="pts-pop">+{outcome.points}</span>}
           </div>
+          {settings.wordInfo && <WordBox item={item} />}
           {typing && given && verdict !== 'correct' && (
             <div className="small">
               You wrote <span className="struck">{given}</span>
+            </div>
+          )}
+          {dictation && dict && given && verdict !== 'correct' && (
+            <div className="small" lang="de">
+              You wrote{' '}
+              {dict.typed.map((w, i) => (
+                <span key={i}>
+                  {i > 0 && ' '}
+                  <span className={w.ok ? undefined : 'struck'}>{w.text}</span>
+                </span>
+              ))}
             </div>
           )}
           {outcome && !card.retry && outcome.after && (
@@ -593,6 +755,11 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
             <button type="button" className="btn" onClick={speak}>
               <IconVolume size={18} /> Listen <span className="kbd">R</span>
             </button>
+            {looping && (
+              <button type="button" className="btn ghost" onClick={stopLoop}>
+                Stop loop
+              </button>
+            )}
             <span className="source">{sourceLabel(source, item, settings.voice)}</span>
           </div>
           <div className="small">

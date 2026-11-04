@@ -1,13 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { levelIndex, loadManifest, type Item, type Manifest } from './lib/deck';
-import { getKv, loadAll, migrateProgress, resetLevel as resetLevelDb, saveAnswer, saveProgress, saveSettings, setKv } from './lib/db';
+import { getKv, loadAll, migrateProgress, resetLevel as resetLevelDb, saveAnswer, saveFavorite, saveProgress, saveSettings, setKv } from './lib/db';
 import { defaultPinned, homeLevels as homeLevelsOf, levelStats as levelStatsOf, withPinned, type LevelStat } from './lib/levels';
 import { currentLevel as currentLevelOf } from './lib/session';
 import { dayKey, emptyDay, withGoalChange, type DayStat } from './lib/scoring';
 import { isDue, isMastered, markKnown, newProgress, review, unmarkKnown, type Progress } from './lib/srs';
 import { DEFAULT_SETTINGS, deviceSettings, onlyDeviceSettings, type Settings } from './lib/settings';
 import { piper } from './lib/audio';
-import { allChunkIds, newer, progressChunk, sumDays } from './lib/sync/core';
+import { allChunkIds, mergeFavorites, newer, progressChunk, sumDays, type Favorites } from './lib/sync/core';
+import { favoriteIds as favoriteIdsOf, isOftenMissed } from './lib/lists';
 import { initSync, markDirty, onSyncApplied } from './lib/sync/engine';
 import { afterFirstScreen, mark } from './lib/startup';
 
@@ -41,6 +42,12 @@ interface Store {
   pinLevels(levels: number[], on: boolean): void;
   /** "Reset level": delete the progress of every sentence in the level (on all synced devices). Returns how many. */
   resetLevel(lv: number): Promise<number>;
+  /** favourite sentences (with when they changed, for sync) */
+  favorites: Favorites;
+  favoriteIds: Set<number>;
+  toggleFavorite(id: number, lv: number): void;
+  /** how many sentences are in "Often missed" */
+  missedCount: number;
   /**
    * Record an answer. The new state is returned right away; `saved` settles when it is
    * stored on the device (the card never waits for it).
@@ -77,6 +84,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [ownDays, setOwnDays] = useState<Map<string, DayStat>>(new Map());
   const [otherDays, setOtherDays] = useState<Record<string, DayStat[]>>({});
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [favorites, setFavorites] = useState<Favorites>({});
+  const favoritesRef = useRef(favorites);
+  favoritesRef.current = favorites;
   const [now, setNow] = useState(() => Date.now());
   const progressRef = useRef(progress);
   progressRef.current = progress;
@@ -111,6 +121,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setOwnDays(new Map(data.days.map((d) => [d.date, d])));
       setOtherDays(data.otherDays);
       setSettings(data.settings);
+      setFavorites(data.favorites);
       setReady(true);
       // not needed for the first screen: check the voice once it is up
       afterFirstScreen(() => piper.check(data.settings.voice).then(() => mark('voice')));
@@ -150,6 +161,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setOwnDays(ds);
         }
         setOtherDays(r.otherDays);
+        if (r.favorites) {
+          const f = mergeFavorites(favoritesRef.current, r.favorites);
+          favoritesRef.current = f;
+          setFavorites(f);
+        }
         if (r.settings) {
           const next = { ...DEFAULT_SETTINGS, ...r.settings.value, ...deviceSettings(settingsRef.current) };
           settingsRef.current = next;
@@ -235,6 +251,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return removed;
   }, []);
 
+  const toggleFavorite = useCallback((id: number, lv: number) => {
+    const on = favoritesRef.current[id]?.[0] !== 1;
+    const t = Date.now();
+    const f: Favorites = { ...favoritesRef.current, [id]: [on ? 1 : 0, t, lv] };
+    favoritesRef.current = f;
+    setFavorites(f);
+    saveFavorite(id, on, lv, t).then(() => markDirty(['favs']), () => {});
+  }, []);
+  const favoriteIds = useMemo(() => favoriteIdsOf(favorites), [favorites]);
+
   const days = useMemo(() => {
     const all = sumDays([[...ownDays.values()], ...Object.values(otherDays)]);
     return new Map(all.map((d) => [d.date, d]));
@@ -242,14 +268,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const derived = useMemo(() => {
     let dueCount = 0;
+    let missedCount = 0;
     const playedPerLevel = new Map<number, number>();
     const masteredPerLevel = new Map<number, number>();
     for (const p of progress.values()) {
       if (isDue(p, now)) dueCount++;
+      if (isOftenMissed(p)) missedCount++;
       playedPerLevel.set(p.lv, (playedPerLevel.get(p.lv) ?? 0) + 1);
       if (isMastered(p)) masteredPerLevel.set(p.lv, (masteredPerLevel.get(p.lv) ?? 0) + 1);
     }
-    return { dueCount, playedPerLevel, masteredPerLevel, levelStats: levelStatsOf(progress.values(), now) };
+    return { dueCount, missedCount, playedPerLevel, masteredPerLevel, levelStats: levelStatsOf(progress.values(), now) };
   }, [progress, now]);
 
   const levelCount = manifest?.levels.length ?? 0;
@@ -285,6 +313,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     homeLevels,
     pinLevels,
     resetLevel,
+    favorites,
+    favoriteIds,
+    toggleFavorite,
     reload,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

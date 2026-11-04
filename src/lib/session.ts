@@ -2,8 +2,8 @@
 import type { Item } from './deck';
 import { dueList, type Progress } from './srs';
 
-export type Mode = 'mc' | 'text' | 'listen';
-export type RoundKind = 'mixed' | 'review' | 'new';
+export type Mode = 'mc' | 'text' | 'listen' | 'dictation';
+export type RoundKind = 'mixed' | 'review' | 'new' | 'fav' | 'missed';
 
 export interface Card {
   item: Item;
@@ -15,7 +15,7 @@ export interface Card {
 
 /** Due reviews to include in a round. */
 export function pickReviews(progress: Iterable<Progress>, now: number, size: number, kind: RoundKind): Progress[] {
-  if (kind === 'new') return [];
+  if (kind !== 'mixed' && kind !== 'review') return [];
   return dueList(progress, now).slice(0, size);
 }
 

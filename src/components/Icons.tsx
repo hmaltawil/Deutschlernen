@@ -131,3 +131,19 @@ export const IconHide = (p: P) => (
     <path d="M8 12h8" />
   </Svg>
 );
+
+export const IconStar = ({ filled, ...p }: P & { filled?: boolean }) => (
+  <Svg {...p}>
+    <path
+      d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z"
+      fill={filled ? 'currentColor' : 'none'}
+    />
+  </Svg>
+);
+
+export const IconPen = (p: P) => (
+  <Svg {...p}>
+    <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+    <path d="M14 6l4 4" />
+  </Svg>
+);

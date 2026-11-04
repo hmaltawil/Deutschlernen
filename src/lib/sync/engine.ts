@@ -193,6 +193,7 @@ export function syncNow(): Promise<void> {
       settingsUpdated: data.settingsUpdated,
       resetAt: data.resetAt,
       levelResets: data.levelResets,
+      favorites: data.favorites,
       lastSeen: cfg.lastSeen,
       dirty: [...new Set([...Object.keys(dirtyMap), ...memSnapshot.keys()])],
     };

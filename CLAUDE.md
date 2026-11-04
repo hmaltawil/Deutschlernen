@@ -29,6 +29,7 @@ npm run test:rules                      # Firestore rules + sync against the emu
 npm run e2e                             # browser suites, see tests/e2e/README.md
 python3 scripts/build_deck.py --report  # rebuild the sentence deck (downloads Tatoeba to data/raw/)
 python3 scripts/fetch_audio.py          # download recordings to data/audio/ and rebuild the bundles
+python3 scripts/build_words.py --report # word info from Wiktionary → public/deck/words/ (downloads 1.1 GB to data/raw/)
 ```
 
 ## Deploying
@@ -52,6 +53,7 @@ python3 scripts/fetch_audio.py          # download recordings to data/audio/ and
 ```
 scripts/build_deck.py        deck builder (stdlib Python): Tatoeba → public/deck/{manifest,level-NN}.json
 scripts/fetch_audio.py       recordings → data/audio/*.mp3 (local) → public/audio/level-NN-<hash>.pack
+scripts/build_words.py       Wiktionary (kaikki.org extract) → public/deck/words/level-NN.json (word info)
 scripts/copy-tts-assets.mjs  ONNX Runtime + Piper phonemizer WASM → public/tts/<TTS_VERSION>/
 scripts/tts-version.mjs      TTS_VERSION = ort<ver>-piper<ver> (also injected as __TTS_VERSION__)
 public/deck/                 generated deck (committed)        public/audio/  generated bundles (committed)
@@ -61,18 +63,20 @@ src/lib/srs.ts               stages 0–4, intervals 1/7/30/120 days, "known" se
 src/lib/session.ts           rounds (due reviews first, then new), currentLevel(), choices (seededRandom), requeue
 src/lib/scoring.ts           points, day stats, streaks, goal history (goalOn)
 src/lib/levels.ts            per-level numbers for the Home level cards, which levels show on Home
-src/lib/answer.ts            typed-answer checking (case-insensitive, ae/oe/ue/ss unless strict), onTrack()
+src/lib/lists.ts             Favourites and Often missed (wrong ≥ 2 and under 75%)
+src/lib/words.ts             word info: loading per level, lines of the word box
+src/lib/answer.ts            typed-answer checking (case-insensitive, ae/oe/ue/ss unless strict), onTrack(), checkDictation()
 src/lib/audio/               index.ts (source chain, unlock), recordings.ts (bundles), piper.ts, webspeech.ts
 src/workers/                 piper.worker.ts (neural voice), recordings.worker.ts (writes bundles to OPFS)
 src/lib/offline.ts           service-worker registration, saving bundles, cleanup of old caches
 src/lib/sync/                code.ts (sync codes), core.ts (pure merge), firestore.ts, engine.ts, config.ts
 src/lib/startup.ts           startup timing marks (Settings → Startup time), afterFirstScreen()
-src/components/              Home, LevelCard, Play (card, summary), Levels, Stats, Settings, Sync, Credits, …
+src/components/              Home, LevelCard, Lists, SentenceRow, WordBox, Play (card, summary), Levels, Stats, Settings, Sync, …
 firestore.rules, firebase.json, tests/   Firestore security rules and their emulator tests
 tests/e2e/                   Playwright browser suites (README there)
 ```
 
-Not in git (rebuildable): `data/raw/` (Tatoeba exports), `data/audio/` (individual MP3s),
+Not in git (rebuildable): `data/raw/` (Tatoeba exports, Wiktionary extract), `data/audio/` (individual MP3s),
 `public/tts/` (copied from node_modules), `dist/`.
 
 ## How the deck is built (deck v2)
@@ -102,6 +106,19 @@ Item format: `{id, de, c:[start,end], a, en, d:[3], r, au?:[audioId, speaker, "B
 every progress record under its new level (`migrateProgress`) and sync switches to new chunk ids
 (`v<N>p<lv>`), so old and new levels never mix. Progress is keyed by the permanent Tatoeba sentence id.
 
+## Word info (after an answer)
+
+`scripts/build_words.py` reads English Wiktionary's German entries (Wiktextract JSONL from kaikki.org,
+CC BY-SA 4.0 — credited in Credits; the word files are CC BY-SA too) and writes, per level, `{sentence id:
+{l, p, g, pl, vf, f, m, parts}}` (format in `src/lib/words.ts`). Choosing a reading: options are the
+form's own entries and its "inflection of …" links (plus verb forms derived from each verb's table,
+e.g. *erlaubte*, and separable verbs from a particle at the clause end: *zog … aus* → *ausziehen*); the
+one whose meaning shares most words with the sentence's English wins (crude stemming + English
+irregulars), with nudges: capitalised mid-sentence → noun, article/determiner before a capitalised word,
+rare verb forms (*ich besser*) lose. Fallbacks: verbs/adjectives used as nouns, compound nouns split into
+known parts. Coverage 98%. Always run with `--report` and read the random samples. ~3.4 MB raw in 30
+files, precached (they're JSON under `deck/`); loaded per level when a round starts. Setting `wordInfo`.
+
 ## Audio (natural first)
 
 1. **Native-speaker recording** (CC BY / CC BY-NC only; NC means non-commercial use only). Stored as
@@ -120,7 +137,7 @@ sentences with one recording; the per-recording endpoint is rate-limited (~1 req
 ## Offline
 
 `vite-plugin-pwa` (generateSW, `autoUpdate`, `clientsClaim` + `skipWaiting` so the very first visit is
-controlled). Precache = app shell + all deck JSON (~7 MB). Runtime cache `tts-runtime` for the voice
+controlled). Precache = app shell + all deck JSON incl. word info (~10 MB, ~80 entries). Runtime cache `tts-runtime` for the voice
 runtime files under `/tts/<TTS_VERSION>/`. **Recordings are never put in Cache Storage** (see pitfalls).
 
 ## Sync (optional, Firebase)
@@ -131,7 +148,8 @@ runtime files under `/tts/<TTS_VERSION>/`. **Recordings are never put in Cache S
 - No accounts: one device creates a 24-character sync code (Crockford base32, shown with a QR/link
   `#/sync?code=…`); the server only sees `SHA-256("luecke-sync-v1:" + code)` → `sync/<id>/chunks/<chunk>`.
   Rules allow read + create/update with size/shape checks; no listing across codes, no deletes.
-- Chunks: `meta` (versions, resetAt), `v2p1…v2p30` (progress per level), `days` (per device), `settings`.
+- Chunks: `meta` (versions, resetAt, levelResets), `v2p1…v2p30` (progress per level), `days` (per device),
+  `settings`, `favs` (favourites).
   One Firestore Lite transaction per sync; only changed chunks are read/written.
 - Merge (`src/lib/sync/core.ts`, pure + unit-tested): per sentence the latest answer wins; each device
   owns its own day stats (totals are sums); newer settings win; "Reset progress" stores `resetAt` and
@@ -152,6 +170,18 @@ runtime files under `/tts/<TTS_VERSION>/`. **Recordings are never put in Cache S
   older version that rewrites meta without them can't bring the old answers back. Points stay.
 - Triggers: start, ~15 s after changes, end of round, online/visibility changes, every 3 min while open.
 - Normal use is ~1% of the free daily quotas; the sync e2e suite writes ~150 docs per run.
+
+## Practice lists, loop audio, dictation
+
+- **Favourites**: star on the card (F key) or in sentence lists. Stored in kv `favorites` = `{id: [on, changed, level]}`
+  (off entries kept so removals sync) and synced as chunk `favs` (latest change per sentence wins; older app
+  versions ignore the chunk). Backups include them. `#/play?kind=fav` plays the least recently played first.
+- **Often missed** = wrong ≥ 2 times and under 75% (`isOftenMissed`), no storage; `#/play?kind=missed`.
+  List pages: `#/list/fav`, `#/list/missed`; "Your lists" card on Home.
+- **Loop audio** (setting `loopAudio`): after playback ends the card plays again after 1.2 s until you go on
+  or tap Stop (a generation counter stops stale loops).
+- **Dictate** mode (`dictation`, 12 pts): the whole sentence is hidden and played; you type all of it;
+  `checkDictation` aligns words (LCS) and marks missed/extra ones; one word off by a letter = "close".
 
 ## Home level cards
 

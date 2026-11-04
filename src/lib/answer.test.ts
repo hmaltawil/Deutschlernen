@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkAnswer, foldUmlauts, levenshtein, normalize, onTrack } from './answer';
+import { checkAnswer, checkDictation, foldUmlauts, levenshtein, normalize, onTrack } from './answer';
 
 describe('answer checking', () => {
   it('ignores case, whitespace and edge punctuation', () => {
@@ -50,5 +50,29 @@ describe('answer checking', () => {
   it('computes edit distance', () => {
     expect(levenshtein('kitten', 'sitting')).toBe(3);
     expect(levenshtein('', 'abc')).toBe(3);
+  });
+});
+
+describe('dictation', () => {
+  const S = 'Ich zog das Hemd aus.';
+  it('accepts the sentence in any case and without punctuation', () => {
+    expect(checkDictation('ich zog das hemd aus', S).verdict).toBe('correct');
+    expect(checkDictation('Ich zog das Hemd aus.', S).verdict).toBe('correct');
+    expect(checkDictation('Wir muessen gehen', 'Wir müssen gehen!').verdict).toBe('correct');
+    expect(checkDictation('Wir muessen gehen', 'Wir müssen gehen!', { strict: true }).verdict).toBe('close');
+  });
+  it('marks missing, misspelled and extra words', () => {
+    const r = checkDictation('Ich zog Hemd aus heute', S);
+    expect(r.verdict).toBe('wrong');
+    expect(r.expected.filter((w) => !w.ok).map((w) => w.text)).toEqual(['das']);
+    expect(r.typed.filter((w) => !w.ok).map((w) => w.text)).toEqual(['heute']);
+  });
+  it('one small typo is "close"', () => {
+    expect(checkDictation('Ich zog das Hemt aus', S).verdict).toBe('close');
+    expect(checkDictation('Ich zog das Hemt auf', S).verdict).toBe('wrong'); // two words off
+    expect(checkDictation('', S).verdict).toBe('wrong');
+  });
+  it('keeps hyphenated words and apostrophes together', () => {
+    expect(checkDictation("Wie geht's dem E-Mail-Team?", "Wie geht's dem E-Mail-Team?").expected.map((w) => w.text)).toEqual(['Wie', "geht's", 'dem', 'E-Mail-Team']);
   });
 });

@@ -3,7 +3,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Progress } from './srs';
 import type { DayStat } from './scoring';
 import { DEFAULT_SETTINGS, deviceSettings, type Settings } from './settings';
-import { newer, progressChunk, sumDays, type SyncResult } from './sync/core';
+import { mergeFavorites, newer, progressChunk, sumDays, type Favorites, type SyncResult } from './sync/core';
 
 interface LueckeDB extends DBSchema {
   progress: { key: number; value: Progress; indexes: { due: number } };
@@ -25,6 +25,8 @@ export interface Backup {
   /** other devices' daily stats (only when sync was on) */
   otherDays?: Record<string, DayStat[]>;
   settings: Settings;
+  /** favourite sentences (added later; older backups have none) */
+  favorites?: Favorites;
 }
 
 export interface LocalData {
@@ -36,6 +38,7 @@ export interface LocalData {
   resetAt: number;
   /** "Reset level" times, by progress chunk id (see sync/core.ts) */
   levelResets: Record<string, number>;
+  favorites: Favorites;
 }
 
 let dbp: Promise<IDBPDatabase<LueckeDB>> | null = null;
@@ -118,7 +121,7 @@ export async function deviceId(): Promise<string> {
 
 export async function loadAll(): Promise<LocalData> {
   return withDb(async (d) => {
-    const [progress, days, settings, otherDays, settingsUpdated, resetAt, levelResets] = await Promise.all([
+    const [progress, days, settings, otherDays, settingsUpdated, resetAt, levelResets, favorites] = await Promise.all([
       d.getAll('progress'),
       d.getAll('days'),
       d.get('kv', 'settings') as Promise<Partial<Settings> | undefined>,
@@ -126,6 +129,7 @@ export async function loadAll(): Promise<LocalData> {
       d.get('kv', 'settingsUpdated') as Promise<number | undefined>,
       d.get('kv', 'resetAt') as Promise<number | undefined>,
       d.get('kv', 'levelResets') as Promise<Record<string, number> | undefined>,
+      d.get('kv', 'favorites') as Promise<Favorites | undefined>,
     ]);
     return {
       progress,
@@ -135,6 +139,7 @@ export async function loadAll(): Promise<LocalData> {
       settingsUpdated: settingsUpdated ?? 0,
       resetAt: resetAt ?? 0,
       levelResets: levelResets ?? {},
+      favorites: favorites ?? {},
     };
   });
 }
@@ -146,6 +151,17 @@ export async function saveAnswer(p: Progress | null, day: DayStat): Promise<void
     if (p) tx.objectStore('progress').put(p);
     tx.objectStore('days').put(day);
     await tx.done;
+  });
+}
+
+/** Star or unstar a sentence. */
+export async function saveFavorite(id: number, on: boolean, lv: number, at = Date.now()): Promise<Favorites> {
+  return withDb(async (d) => {
+    const tx = d.transaction('kv', 'readwrite');
+    const favs = { ...(((await tx.store.get('favorites')) ?? {}) as Favorites), [id]: [on ? 1 : 0, at, lv] as [0 | 1, number, number] };
+    await tx.store.put(favs, 'favorites');
+    await tx.done;
+    return favs;
   });
 }
 
@@ -192,6 +208,7 @@ export async function applySync(r: SyncResult, deck?: number): Promise<void> {
     const merged = { ...r.levelResets };
     for (const [c, t] of Object.entries(localResets)) if (t > (merged[c] ?? 0)) merged[c] = t;
     await kv.put(merged, 'levelResets');
+    if (r.favorites) await kv.put(mergeFavorites(((await kv.get('favorites')) ?? {}) as Favorites, r.favorites), 'favorites');
     if (r.settings) {
       // keep this device's own settings as they are now (they may have changed during the sync)
       const cur = ((await kv.get('settings')) ?? {}) as Partial<Settings>;
@@ -203,8 +220,8 @@ export async function applySync(r: SyncResult, deck?: number): Promise<void> {
 }
 
 export async function exportBackup(): Promise<Backup> {
-  const { progress, days, otherDays, settings } = await loadAll();
-  return { app: 'luecke', version: 1, exported: new Date().toISOString(), progress, days, otherDays, settings };
+  const { progress, days, otherDays, settings, favorites } = await loadAll();
+  return { app: 'luecke', version: 1, exported: new Date().toISOString(), progress, days, otherDays, settings, favorites };
 }
 
 export function validateBackup(x: unknown): Backup {
@@ -266,6 +283,7 @@ export async function importBackup(raw: unknown, levelOf?: Map<number, number>, 
     kv.put({ ...DEFAULT_SETTINGS, ...b.settings, ...deviceSettings(cur) }, 'settings');
     kv.put(Date.now(), 'settingsUpdated');
     kv.put(resetSinceBackup ? {} : (b.otherDays ?? {}), 'otherDays');
+    if (b.favorites) kv.put(mergeFavorites(((await kv.get('favorites')) ?? {}) as Favorites, b.favorites), 'favorites');
     await tx.done;
     return { restored, dropped };
   });
@@ -314,18 +332,27 @@ export async function resetLevel(lv: number, chunk: string, at = Date.now()): Pr
  */
 export async function migrateProgress(levelOf: Map<number, number>): Promise<number> {
   return withDb(async (d) => {
-    const tx = d.transaction('progress', 'readwrite');
+    const tx = d.transaction(['progress', 'kv'], 'readwrite');
+    const store = tx.objectStore('progress');
     let changed = 0;
-    for (const p of await tx.store.getAll()) {
+    for (const p of await store.getAll()) {
       const lv = levelOf.get(p.id);
       if (lv === undefined) {
-        await tx.store.delete(p.id);
+        await store.delete(p.id);
         changed++;
       } else if (lv !== p.lv) {
-        await tx.store.put({ ...p, lv });
+        await store.put({ ...p, lv });
         changed++;
       }
     }
+    // favourites remember their level too
+    const favs = ((await tx.objectStore('kv').get('favorites')) ?? {}) as Favorites;
+    const moved: Favorites = {};
+    for (const [id, [on, t]] of Object.entries(favs)) {
+      const lv = levelOf.get(Number(id));
+      if (lv !== undefined) moved[id] = [on, t, lv];
+    }
+    await tx.objectStore('kv').put(moved, 'favorites');
     await tx.done;
     return changed;
   });

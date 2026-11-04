@@ -23,11 +23,12 @@ and prints `PASS`/`FAIL` lines; it exits non-zero on failure. Screenshots go to
 | `options.cjs` | Settings → While you answer: speaker hidden before answering (and the option to show it), colour hint while typing, ä ö ü ß buttons (off by default), same-size box, strict ä/ö/ü/ß, second try for small typos |
 | `update.cjs` | A new version (simulated by changing `dist/sw.js`) never reloads the page during a round; it loads when you leave the round or tap "Next round", and right away on Home. Local preview only |
 | `home-levels.cjs` | Level cards on Home: levels you play appear (most recent first) with today's numbers; Play / Review only that level; Remove from Home / Show on Home; Reset level (progress gone, other levels and points kept) |
+| `practice.cjs` | Word info after answering (and switching it off), favourites (F key, list page, favourites round), Often missed, loop audio and Stop, Dictate mode |
 | `known.cjs` | "I know this" (button, K key, undo, no re-ask, Known filter, Review again) and "your level" on Home |
 | `migrate.cjs` | Progress from an older deck is re-filed under the new levels once |
 | `recordings.cjs` | Recording bundles: auto-save of the played level, offline playback, Save all / Stop / Remove, cleanup of outdated bundles and of the old per-recording cache |
 | `offline.cjs` | Service worker: the app opens with no internet (server really stopped), saved recordings play, unsaved ones fall back to the neural voice, progress is kept |
-| `sync.cjs` | Three browsers sharing a sync code: merge, points, settings, offline answers, join via link, "Reset level" and reset reach all, turning off keeps data. **Uses the real Firebase project** (or an emulator build, below) |
+| `sync.cjs` | Three browsers sharing a sync code: merge, points, settings, offline answers, join via link, favourites, "Reset level" and reset reach all, turning off keeps data. **Uses the real Firebase project** (or an emulator build, below) |
 | `dropdb.cjs` | Safari dropping the database connection (iPhone app in background): answers still show, play audio and save. Needs a test build (below) |
 | `layout-typing.cjs` | The typing box fits each missing word (nothing cut off, not much wider) at 320, 390 and 1000 px; the same-size box is equal for every word and grows while typing |
 | `layout-choices.cjs`, `layout-feedback.cjs` | Longest German words at 320–1000 px in light and dark: nothing sticks out of the card (uses the built CSS; run `npm run build` first) |

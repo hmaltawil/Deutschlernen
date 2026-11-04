@@ -31,6 +31,22 @@ export function Credits() {
           . The speaker and licence are shown after each answer. Copies of the recordings are stored with this app
           so they can be saved for offline use.
         </p>
+        <h2>Word info</h2>
+        <p style={{ margin: 0 }}>
+          Base forms, genders, plurals, verb forms and meanings come from{' '}
+          <a href="https://en.wiktionary.org" target="_blank" rel="noreferrer">
+            Wiktionary
+          </a>{' '}
+          (via the{' '}
+          <a href="https://kaikki.org" target="_blank" rel="noreferrer">
+            Wiktextract
+          </a>{' '}
+          extract), licensed{' '}
+          <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">
+            CC BY-SA 4.0
+          </a>
+          . The word files of this app are shared under the same licence.
+        </p>
         <h2>Neural voice</h2>
         <p style={{ margin: 0 }}>
           Sentences without a recording are spoken on your device by{' '}

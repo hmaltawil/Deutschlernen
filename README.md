@@ -5,7 +5,9 @@
 A cloze-sentence trainer for German. You learn words by filling the gap in real sentences, most common words first. It has spaced repetition, natural audio, points, daily goals and streaks.
 
 - **32,672 sentences** in 30 levels covering ~22,700 words (down to frequency rank ~25,000). Levels get harder in two ways at once: rarer missing words, and longer sentences (up to 22 words) with more complex grammar (clauses, Konjunktiv, passive, …).
-- **Three ways to answer:** multiple choice (4 pts), typing (8 pts) or listening (10 pts). A streak of correct answers adds up to +50%.
+- **Four ways to answer:** multiple choice (4 pts), typing (8 pts), listening (10 pts) or dictation — hear the sentence and write all of it (12 pts). A streak of correct answers adds up to +50%.
+- **Word info after each answer:** the missing word's base form, der/die/das and plural, verb forms, what form it is and its English meaning, from Wiktionary (can be turned off).
+- **Lists:** star sentences as favourites, and practise "Often missed" sentences (wrong at least twice, until 75%).
 - **Spaced repetition.** Each correct answer moves a sentence 25% → 50% → 75% → 100% and waits 1 / 7 / 30 / 120 days before the next review (you can change the intervals). A wrong answer resets it to 0% and asks it again at the end of the round.
 - **Natural audio, best source first:**
   1. **Native-speaker recordings** for ~6,100 sentences (mostly the early levels), stored with the app as one bundle per level (`public/audio/level-NN-<hash>.pack`), with tatoeba.org as a fallback.
@@ -74,6 +76,7 @@ npm run test:rules
 |---|---|
 | `scripts/build_deck.py` | Deck builder: frequency ranking, cloze choice, distractors, levels |
 | `scripts/fetch_audio.py` | Downloads the deck's recordings from Tatoeba and packs them into per-level bundles |
+| `scripts/build_words.py` | Word info for every missing word from Wiktionary (kaikki.org extract) |
 | `scripts/copy-tts-assets.mjs` | Copies the ONNX Runtime + Piper phonemizer WASM into `public/tts/` (runs automatically) |
 | `src/lib/srs.ts` | Spaced-repetition scheduling |
 | `src/lib/session.ts` | Builds rounds (due reviews first, then new sentences by level) |
