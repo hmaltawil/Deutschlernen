@@ -28,6 +28,7 @@ and prints `PASS`/`FAIL` lines; it exits non-zero on failure. Screenshots go to
 | `offline.cjs` | Service worker: the app opens with no internet (server really stopped), saved recordings play, unsaved ones fall back to the neural voice, progress is kept |
 | `sync.cjs` | Three browsers sharing a sync code: merge, points, settings, offline answers, join via link, reset reaches all, turning off keeps data. **Uses the real Firebase project** (or an emulator build, below) |
 | `dropdb.cjs` | Safari dropping the database connection (iPhone app in background): answers still show, play audio and save. Needs a test build (below) |
+| `layout-typing.cjs` | The typing box fits each missing word (nothing cut off, not much wider) at 320, 390 and 1000 px; the same-size box is equal for every word and grows while typing |
 | `layout-choices.cjs`, `layout-feedback.cjs` | Longest German words at 320–1000 px in light and dark: nothing sticks out of the card (uses the built CSS; run `npm run build` first) |
 | `startup.cjs` | Startup time with the CPU slowed 6× in several states (voice, all recordings saved, sync on) |
 

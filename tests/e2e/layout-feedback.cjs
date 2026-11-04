@@ -11,7 +11,7 @@ const html = `<main class="main">
     <div class="small">You wrote <span class="struck">Geschwindigkeitsueberschreitungg</span></div>
   </div>
 </form>
-<form class="card cloze-card"><div class="sentence" lang="de">Tom wurde wegen <input class="blank-input" style="width:31ch"> angehalten.</div></form>
+<form class="card cloze-card"><div class="sentence" lang="de">Tom wurde wegen <span class="blank-wrap"><input class="blank-input" size="1" value="${W}"><span class="blank-sizer">${W}</span><span class="blank-sizer">${W}​</span></span> angehalten.</div></form>
 <section class="card"><ul class="summary-list"><li><span>✓</span><div><div lang="de" style="font-family:var(--serif);font-size:1.05rem">Tom wurde wegen <strong>${W}</strong> angehalten.</div><div class="small muted">Tom was stopped for speeding.</div></div></li></ul></section>
 </main>`;
 (async () => {

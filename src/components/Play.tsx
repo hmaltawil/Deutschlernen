@@ -386,26 +386,38 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
     inputRef.current?.focus();
   };
 
-  // fitBox: as wide as the missing word; otherwise the same size for every word, growing as you type
-  const width = settings.fitBox ? `${Math.max(item.a.length + 1, 5)}ch` : `${Math.max(given.length + 2, 8)}ch`;
   const track = settings.typingColor && given.trim() ? (onTrack(given, item.a, { strict }) ? ' on-track' : ' off-track') : '';
+  // The box takes the real width of the text, measured by invisible copies in the same spot
+  // (counting letters doesn't work: "m" is three times as wide as "l"). fitBox: as wide as the
+  // missing word; otherwise the same size for every word. Either way it grows while you type.
   const gap = answered ? (
     <span className={`filled ${verdict === 'correct' ? 'ok' : 'bad'}`}>{item.a}</span>
   ) : typing ? (
-    <input
-      ref={inputRef}
-      className={`blank-input${track}`}
-      style={{ width }}
-      value={given}
-      onChange={(e) => setGiven(e.target.value)}
-      aria-label="Missing word"
-      autoComplete="off"
-      autoCorrect="off"
-      autoCapitalize="off"
-      spellCheck={false}
-      enterKeyHint="done"
-      placeholder={hint ? `${item.a[0]}…` : ''}
-    />
+    <span className={`blank-wrap${settings.fitBox ? '' : ' same-size'}`}>
+      <input
+        ref={inputRef}
+        className={`blank-input${track}`}
+        size={1}
+        value={given}
+        onChange={(e) => setGiven(e.target.value)}
+        aria-label="Missing word"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        enterKeyHint="done"
+        placeholder={hint ? `${item.a[0]}…` : ''}
+      />
+      {settings.fitBox && (
+        <span className="blank-sizer" aria-hidden="true">
+          {item.a}
+        </span>
+      )}
+      <span className="blank-sizer" aria-hidden="true">
+        {given || (hint ? `${item.a[0]}…` : '')}
+        {'​'}
+      </span>
+    </span>
   ) : (
     <span className="blank" style={{ width: '5ch' }} aria-label="blank">
       &nbsp;

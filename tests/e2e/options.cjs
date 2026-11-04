@@ -97,7 +97,7 @@ const fold = (s) => s.replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, '
   // card 1: box size, colour hint, second try
   let a = await card();
   ok(!(await page.$('.umlauts')), 'no ä ö ü ß buttons by default');
-  ok((await page.$eval('.blank-input', (e) => e.style.width)) === '8ch', `same-size box: 8ch for "${a}" (${a.length} letters)`);
+  ok(!!(await page.$('.blank-wrap.same-size')), `same-size box for "${a}" (sizes are checked in layout-typing.cjs)`);
   await page.fill('.blank-input', a.slice(0, 2).toLowerCase());
   ok(await page.$eval('.blank-input', (e) => e.classList.contains('on-track')), 'colour hint: green while the start matches');
   await page.fill('.blank-input', a.slice(0, 2) + 'qx');
@@ -151,7 +151,7 @@ const fold = (s) => s.replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, '
   await page.click('.umlauts button:has-text("ü")');
   ok((await page.inputValue('.blank-input')) === 'ü', '…and type into the box');
   await page.fill('.blank-input', '');
-  ok((await page.$eval('.blank-input', (e) => e.style.width)) === `${Math.max(a.length + 1, 5)}ch`, 'box fits the word again when the option is on');
+  ok(!(await page.$('.blank-wrap.same-size')) && !!(await page.$('.blank-wrap')), 'box fits the word again when the option is on');
   for (let i = 0; i < 6 && !um(a); i++) {
     await page.fill('.blank-input', a);
     await page.keyboard.press('Enter');

@@ -175,6 +175,10 @@ runtime files under `/tts/<TTS_VERSION>/`. **Recordings are never put in Cache S
    32-bit math (`Math.imul`, `seededRandom`); `session.test.ts` checks each button gets ~25%.
 11. **Streaks** use the goal that applied on each day (`settings.goalHistory`, written when the goal
    changes), so changing the goal never rewrites past streak days.
+12. **Typing box width:** sizing it by letter count (`ch`) was wrong in the serif font ("Hemd" was cut off
+   on iPhone, "stellte" had a big gap). The input now shares a one-cell grid (`.blank-wrap`) with
+   invisible copies of the word and of the typed text (`.blank-sizer`), so it takes their real width;
+   `layout-typing.cjs` checks it.
 
 ## Ideas discussed, not built yet
 

@@ -550,19 +550,49 @@ h3 {
   background: var(--gap-soft);
   border-radius: 4px 4px 0 0;
 }
+/* The typing box sits in a one-cell grid with invisible copies of the word (and of what is
+   typed), so it takes their real width in the sentence's font. */
+.blank-wrap {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr); /* the box fills the frame: the word's width, at least min-width */
+  min-width: 2.2em;
+  max-width: 100%;
+  vertical-align: baseline;
+}
+.blank-wrap.same-size {
+  min-width: 8ch;
+}
+.blank-wrap > * {
+  grid-area: 1 / 1;
+}
+.blank-sizer,
 .blank-input {
   font-family: var(--serif);
   font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  line-height: 1.2;
+  margin: 0;
+  padding: 0 4px;
+}
+.blank-sizer {
+  visibility: hidden;
+  white-space: pre;
+  overflow: hidden;
+  padding-right: calc(4px + 0.2em); /* room for the cursor after the last letter */
+  border-bottom: 3px solid transparent;
+}
+.blank-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  min-width: 0;
   border: 0;
   border-bottom: 3px solid var(--gap);
   border-radius: 4px 4px 0 0;
   background: var(--gap-soft);
-  padding: 0 4px;
-  min-width: 4ch;
-  max-width: 100%;
   outline: none;
   color: var(--ink);
-  line-height: 1.2;
 }
 .blank-input:focus {
   border-bottom-color: var(--accent);
