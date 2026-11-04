@@ -41,9 +41,18 @@ export async function pickNew(
   return out;
 }
 
-/** First level that still has unplayed sentences (1 if nothing played). */
-export function currentLevel(playedPerLevel: Map<number, number>, levelSizes: { n: number; count: number }[]): number {
-  for (const l of levelSizes) if ((playedPerLevel.get(l.n) ?? 0) < l.count) return l.n;
+/**
+ * The level to continue with: the level you chose last (or 1), moving on to the next
+ * level once it has no unplayed sentences left.
+ */
+export function currentLevel(
+  playedPerLevel: Map<number, number>,
+  levelSizes: { n: number; count: number }[],
+  chosen = 1,
+): number {
+  const open = (l: { n: number; count: number }) => (playedPerLevel.get(l.n) ?? 0) < l.count;
+  for (const l of levelSizes) if (l.n >= chosen && open(l)) return l.n;
+  for (const l of levelSizes) if (open(l)) return l.n;
   return levelSizes.length ? levelSizes[levelSizes.length - 1].n : 1;
 }
 

@@ -1071,3 +1071,18 @@ table.data td:first-child {
   height: 100%;
   display: block;
 }
+
+.known-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+.known-row .small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--good);
+  font-weight: 600;
+}

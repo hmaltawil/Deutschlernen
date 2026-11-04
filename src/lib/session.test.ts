@@ -46,6 +46,13 @@ describe('session', () => {
     expect(currentLevel(new Map([[1, 2]]), sizes)).toBe(2);
     expect(currentLevel(new Map([[1, 2], [2, 2]]), sizes)).toBe(2);
   });
+  it('continues from the level you chose, moving on when it is finished', () => {
+    const sizes = [1, 2, 3, 4].map((n) => ({ n, count: 2 }));
+    expect(currentLevel(new Map(), sizes, 3)).toBe(3); // chose level 3
+    expect(currentLevel(new Map([[3, 2]]), sizes, 3)).toBe(4); // level 3 done → 4
+    expect(currentLevel(new Map([[3, 2], [4, 2]]), sizes, 3)).toBe(1); // nothing left above → first open level
+    expect(currentLevel(new Map([[1, 1]]), sizes, 1)).toBe(1); // going back to a lower level works too
+  });
   it('shuffles choices deterministically and includes the answer', () => {
     const a = choices(item(42));
     expect(a).toHaveLength(4);

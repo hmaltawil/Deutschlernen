@@ -68,17 +68,17 @@ export const progressChunk = (lv: number, deck = 1) => (deck > 1 ? `v${deck}p${l
 
 /* ---------- encoding (canonical, so equal data gives equal strings) ---------- */
 
-type PRow = [number, number, number, number, number, number, number];
+type PRow = [number, number, number, number, number, number, number] | [number, number, number, number, number, number, number, 1];
 
 export function encodeProgress(list: Progress[]): string {
   const rows: PRow[] = [...list]
     .sort((a, b) => a.id - b.id)
-    .map((p) => [p.id, p.stage, p.due, p.correct, p.wrong, p.first, p.last]);
+    .map((p): PRow => (p.known ? [p.id, p.stage, p.due, p.correct, p.wrong, p.first, p.last, 1] : [p.id, p.stage, p.due, p.correct, p.wrong, p.first, p.last]));
   return JSON.stringify(rows);
 }
 
 export function decodeProgress(data: string, lv: number): Progress[] {
-  return (JSON.parse(data) as PRow[]).map(([id, stage, due, correct, wrong, first, last]) => ({
+  return (JSON.parse(data) as PRow[]).map(([id, stage, due, correct, wrong, first, last, known]) => ({
     id,
     lv,
     stage,
@@ -87,6 +87,7 @@ export function decodeProgress(data: string, lv: number): Progress[] {
     wrong,
     first,
     last,
+    ...(known ? { known: true } : {}),
   }));
 }
 
@@ -125,7 +126,7 @@ export function newer(a: Progress, b: Progress): boolean {
 
 export function sameProgress(a: Progress, b: Progress): boolean {
   return (
-    a.id === b.id && a.stage === b.stage && a.due === b.due && a.correct === b.correct && a.wrong === b.wrong && a.first === b.first && a.last === b.last
+    a.id === b.id && a.stage === b.stage && a.due === b.due && a.correct === b.correct && a.wrong === b.wrong && a.first === b.first && a.last === b.last && !!a.known === !!b.known
   );
 }
 

@@ -21,6 +21,8 @@ export interface Progress {
   wrong: number;
   first: number;
   last: number;
+  /** marked "known" by the learner: counts as mastered and is never reviewed */
+  known?: boolean;
 }
 
 export function newProgress(id: number, lv: number, now: number): Progress {
@@ -33,12 +35,22 @@ export function review(
   now: number,
   intervals: readonly number[] = DEFAULT_INTERVALS,
 ): Progress {
+  const { known: _drop, ...rest } = p; // answering a sentence again puts it back into normal reviews
+  void _drop;
   if (!correct) {
-    return { ...p, stage: 0, due: now, wrong: p.wrong + 1, last: now };
+    return { ...rest, stage: 0, due: now, wrong: p.wrong + 1, last: now };
   }
   const stage = Math.min(p.stage + 1, MAX_STAGE);
   const days = intervals[stage - 1] ?? intervals[intervals.length - 1];
-  return { ...p, stage, due: now + days * DAY, correct: p.correct + 1, last: now };
+  return { ...rest, stage, due: now + days * DAY, correct: p.correct + 1, last: now };
+}
+
+/** Far enough in the future that a known sentence never comes due (and still fits a Date). */
+const NEVER = 100 * 365 * DAY;
+
+/** Mark a sentence as known: 100% mastered, never reviewed. */
+export function markKnown(p: Progress, now: number): Progress {
+  return { ...p, known: true, stage: MAX_STAGE, due: now + NEVER, last: now };
 }
 
 export function mastery(stage: number): number {
@@ -46,11 +58,11 @@ export function mastery(stage: number): number {
 }
 
 export function isDue(p: Progress, now: number): boolean {
-  return p.due <= now;
+  return !p.known && p.due <= now;
 }
 
 export function dueList(all: Iterable<Progress>, now: number): Progress[] {
   const out: Progress[] = [];
-  for (const p of all) if (p.due <= now) out.push(p);
+  for (const p of all) if (isDue(p, now)) out.push(p);
   return out.sort((a, b) => a.due - b.due || a.id - b.id);
 }

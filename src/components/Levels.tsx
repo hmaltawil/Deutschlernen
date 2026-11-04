@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { levelSummary, loadLevel, type Item } from '../lib/deck';
 import { mastery } from '../lib/srs';
+import { currentLevel } from '../lib/session';
 import { useStore } from '../store';
 import { IconArrowLeft, IconPlay } from './Icons';
 
 export function Levels() {
-  const { manifest, playedPerLevel, masteredPerLevel } = useStore();
+  const { manifest, playedPerLevel, masteredPerLevel, settings } = useStore();
   if (!manifest) return null;
+  const mine = currentLevel(playedPerLevel, manifest.levels, settings.currentLevel);
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div>
@@ -23,7 +25,14 @@ export function Levels() {
           const done = masteredPerLevel.get(l.n) ?? 0;
           return (
             <a key={l.n} className="level-row" href={`#/levels/${l.n}`}>
-              <span className="lv">Level {l.n}</span>
+              <span className="lv">
+                Level {l.n}
+                {l.n === mine && (
+                  <span className="badge review" style={{ display: 'table', marginTop: 4 }}>
+                    yours
+                  </span>
+                )}
+              </span>
               <div className="stack" style={{ gap: 4 }}>
                 <div className="meter thin" aria-hidden="true">
                   <span className="m-done" style={{ width: `${(done / l.count) * 100}%` }} />
@@ -46,10 +55,10 @@ export function Levels() {
 }
 
 const STAGE_COLOR = ['var(--m0)', 'var(--m1)', 'var(--m2)', 'var(--m3)', 'var(--m4)'];
-type Filter = 'all' | 'played' | 'unplayed';
+type Filter = 'all' | 'played' | 'unplayed' | 'known';
 
 export function LevelDetail({ n }: { n: number }) {
-  const { manifest, progress, playedPerLevel } = useStore();
+  const { manifest, progress, playedPerLevel, setKnown } = useStore();
   const [items, setItems] = useState<Item[] | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [limit, setLimit] = useState(60);
@@ -59,7 +68,15 @@ export function LevelDetail({ n }: { n: number }) {
   }, [n]);
   const shown = useMemo(() => {
     if (!items) return [];
-    return items.filter((it) => (filter === 'all' ? true : filter === 'played' ? progress.has(it.id) : !progress.has(it.id)));
+    return items.filter((it) =>
+      filter === 'all'
+        ? true
+        : filter === 'played'
+          ? progress.has(it.id)
+          : filter === 'known'
+            ? !!progress.get(it.id)?.known
+            : !progress.has(it.id),
+    );
   }, [items, filter, progress]);
   const info = manifest?.levels.find((l) => l.n === n);
   if (!info) return <div className="card">No such level.</div>;
@@ -78,11 +95,11 @@ export function LevelDetail({ n }: { n: number }) {
           </div>
         </div>
         <a className="btn primary" href={`#/play?kind=new&level=${n}`}>
-          <IconPlay size={16} /> Learn from this level
+          <IconPlay size={16} /> Play this level
         </a>
       </div>
       <div className="seg" role="group" aria-label="Filter sentences">
-        {(['all', 'played', 'unplayed'] as Filter[]).map((f) => (
+        {(['all', 'played', 'unplayed', 'known'] as Filter[]).map((f) => (
           <button key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>
             {f[0].toUpperCase() + f.slice(1)}
           </button>
@@ -101,7 +118,7 @@ export function LevelDetail({ n }: { n: number }) {
                 <span
                   className="dot"
                   style={{ background: p ? STAGE_COLOR[p.stage] : 'transparent', border: p ? 0 : '1.5px solid var(--line)' }}
-                  title={p ? `${mastery(p.stage)}% mastered` : 'Not played yet'}
+                  title={p ? (p.known ? 'Known' : `${mastery(p.stage)}% mastered`) : 'Not played yet'}
                 />
                 <div>
                   <div className="de" lang="de">
@@ -113,6 +130,14 @@ export function LevelDetail({ n }: { n: number }) {
                     {it.en}
                     {it.au ? ' · native audio' : ''}
                   </div>
+                  {p?.known && (
+                    <div className="row" style={{ gap: 8, marginTop: 4 }}>
+                      <span className="badge">known · not reviewed</span>
+                      <button className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} onClick={() => setKnown(it.id, false)}>
+                        Review again
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );

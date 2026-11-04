@@ -15,6 +15,8 @@ export interface Settings {
   theme: Theme;
   /** download a level's recording bundle when you start playing it */
   autoSaveRecordings: boolean;
+  /** the level you chose last; Home and Play continue from here */
+  currentLevel?: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {

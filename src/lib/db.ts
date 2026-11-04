@@ -101,6 +101,10 @@ export async function saveAnswer(p: Progress | null, day: DayStat): Promise<void
   await tx.done;
 }
 
+export async function saveProgress(p: Progress): Promise<void> {
+  await (await db()).put('progress', p);
+}
+
 export async function saveSettings(s: Settings, updated = Date.now()): Promise<void> {
   const d = await db();
   const tx = d.transaction('kv', 'readwrite');

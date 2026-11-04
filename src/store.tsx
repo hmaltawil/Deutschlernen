@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { loadLevel, loadManifest, type Item, type Manifest } from './lib/deck';
-import { getKv, loadAll, migrateProgress, saveAnswer, saveSettings, setKv } from './lib/db';
+import { getKv, loadAll, migrateProgress, saveAnswer, saveProgress, saveSettings, setKv } from './lib/db';
 import { dayKey, emptyDay, type DayStat } from './lib/scoring';
-import { MAX_STAGE, newProgress, review, type Progress } from './lib/srs';
+import { isDue, markKnown, MAX_STAGE, newProgress, review, type Progress } from './lib/srs';
 import { DEFAULT_SETTINGS, type Settings } from './lib/settings';
 import { piper } from './lib/audio';
 import { allChunkIds, newer, progressChunk, sumDays } from './lib/sync/core';
@@ -30,6 +30,11 @@ interface Store {
   playedPerLevel: Map<number, number>;
   masteredPerLevel: Map<number, number>;
   recordAnswer(a: AnswerInput): Promise<{ before: Progress | null; after: Progress | null }>;
+  /**
+   * Mark a played sentence as known (never reviewed) or put it back into reviews.
+   * `restore` brings back an earlier state (undo right after marking).
+   */
+  setKnown(id: number, known: boolean, restore?: Progress | null): Promise<Progress | null>;
   updateSettings(patch: Partial<Settings>): void;
   reload(): Promise<void>;
 }
@@ -162,6 +167,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return { before, after };
   }, []);
 
+  const setKnown = useCallback(async (id: number, known: boolean, restore?: Progress | null) => {
+    const cur = progressRef.current.get(id);
+    if (!cur) return null;
+    const t = Date.now();
+    let next: Progress;
+    if (known) next = markKnown(cur, t);
+    else {
+      const { known: _k, ...base } = restore ?? { ...cur, due: t }; // back into reviews: due now
+      void _k;
+      next = { ...base, last: t };
+    }
+    const p = new Map(progressRef.current).set(id, next);
+    progressRef.current = p;
+    setProgress(p);
+    setNow(t);
+    await saveProgress(next);
+    markDirty([progressChunk(next.lv, deckVersionRef.current)]);
+    return next;
+  }, []);
+
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     const next = { ...settingsRef.current, ...patch };
     settingsRef.current = next;
@@ -179,7 +204,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const playedPerLevel = new Map<number, number>();
     const masteredPerLevel = new Map<number, number>();
     for (const p of progress.values()) {
-      if (p.due <= now) dueCount++;
+      if (isDue(p, now)) dueCount++;
       playedPerLevel.set(p.lv, (playedPerLevel.get(p.lv) ?? 0) + 1);
       if (p.stage >= MAX_STAGE) masteredPerLevel.set(p.lv, (masteredPerLevel.get(p.lv) ?? 0) + 1);
     }
@@ -197,6 +222,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     today: dayKey(now),
     ...derived,
     recordAnswer,
+    setKnown,
     updateSettings,
     reload,
   };

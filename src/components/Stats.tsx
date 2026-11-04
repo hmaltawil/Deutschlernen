@@ -50,6 +50,7 @@ export function Stats() {
   const forecast: Datum[] = useMemo(() => {
     const counts = new Map<string, number>();
     for (const p of progress.values()) {
+      if (p.known) continue;
       const key = p.due <= now ? today : dayKey(p.due);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }

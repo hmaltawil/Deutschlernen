@@ -38,7 +38,7 @@ export function Home() {
   const streak = useMemo(() => streaks(days.values(), settings.dailyGoal, today), [days, settings.dailyGoal, today]);
   const mastered = useMemo(() => [...progress.values()].filter((p) => p.stage >= MAX_STAGE).length, [progress]);
   if (!manifest) return null;
-  const lv = currentLevel(playedPerLevel, manifest.levels);
+  const lv = currentLevel(playedPerLevel, manifest.levels, settings.currentLevel);
   const info = manifest.levels[lv - 1];
   const played = playedPerLevel.get(lv) ?? 0;
   const lvMastered = masteredPerLevel.get(lv) ?? 0;
@@ -99,11 +99,24 @@ export function Home() {
       </section>
 
       {info && (
-        <a className="card stack" style={{ textDecoration: 'none', color: 'inherit', gap: 10 }} href={`#/levels/${lv}`}>
+        <section className="card stack" style={{ gap: 10 }} data-testid="current-level">
           <div className="spread">
-            <h2>Level {lv}</h2>
-            <span className="small muted">{levelSummary(info)}</span>
+            <h2>
+              <span className="tiny muted" style={{ display: 'block', fontWeight: 500 }}>
+                Your level
+              </span>
+              Level {lv}
+            </h2>
+            <div className="row" style={{ gap: 6 }}>
+              <a className="btn ghost" style={{ minHeight: 36, padding: '6px 10px' }} href={`#/levels/${lv}`}>
+                Sentences
+              </a>
+              <a className="btn" style={{ minHeight: 36, padding: '6px 12px' }} href="#/levels">
+                Change level
+              </a>
+            </div>
           </div>
+          <span className="small muted">{levelSummary(info)}</span>
           <div className="meter" aria-label={`${played} of ${info.count} played`}>
             <span style={{ width: `${(played / info.count) * 100}%` }} />
           </div>
@@ -113,7 +126,7 @@ export function Home() {
             </span>
             <span>{Math.round((info.audio / info.count) * 100)}% recorded by native speakers</span>
           </div>
-        </a>
+        </section>
       )}
 
       <section className="tiles">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAY, dueList, mastery, newProgress, review } from './srs';
+import { DAY, dueList, isDue, markKnown, mastery, newProgress, review } from './srs';
 
 const T0 = Date.UTC(2026, 10, 3);
 
@@ -38,5 +38,18 @@ describe('srs', () => {
   });
   it('mastery percentages', () => {
     expect([0, 1, 2, 3, 4].map(mastery)).toEqual([0, 25, 50, 75, 100]);
+  });
+  it('known sentences count as mastered and never come due', () => {
+    const p = markKnown(review(newProgress(1, 1, T0), false, T0), T0 + 5);
+    expect(p.known).toBe(true);
+    expect(mastery(p.stage)).toBe(100);
+    expect(isDue(p, T0 + 50 * 365 * DAY)).toBe(false);
+    expect(dueList([p], T0 + 50 * 365 * DAY)).toEqual([]);
+    expect(new Date(p.due).getFullYear()).toBeGreaterThan(2100); // still a valid date
+  });
+  it('answering a known sentence again puts it back into reviews', () => {
+    const p = review(markKnown(newProgress(1, 1, T0), T0), false, T0 + 1);
+    expect(p.known).toBeUndefined();
+    expect(isDue(p, T0 + 1)).toBe(true);
   });
 });

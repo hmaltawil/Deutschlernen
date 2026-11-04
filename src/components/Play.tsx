@@ -43,6 +43,12 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
   const [combo, setCombo] = useState(0);
   const [err, setErr] = useState('');
 
+  // starting a level from the Levels page makes it your current level (shown on Home)
+  useEffect(() => {
+    if (level && level !== settings.currentLevel) store.updateSettings({ currentLevel: level });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level]);
+
   // build a round
   useEffect(() => {
     if (!manifest) return;
@@ -57,7 +63,7 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
       const need = kind === 'review' ? 0 : settings.roundSize - reviewItems.length;
       const played = new Map<number, number>();
       for (const p of prog.values()) played.set(p.lv, (played.get(p.lv) ?? 0) + 1);
-      const from = level ?? currentLevel(played, manifest.levels);
+      const from = level ?? currentLevel(played, manifest.levels, settings.currentLevel);
       const fresh = need > 0 ? await pickNew(prog, need, from, manifest.levels.length, loadLevel) : [];
       if (cancelled) return;
       const c = makeCards(reviewItems, fresh);
@@ -102,6 +108,25 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
     [cards, idx, combo, store],
   );
 
+  const [knownIds, setKnownIds] = useState<Set<number>>(new Set());
+  const onKnown = useCallback(
+    async (known: boolean, restore: Progress | null): Promise<Progress | null> => {
+      const id = cards[idx].item.id;
+      const prev = store.progress.get(id) ?? null;
+      await store.setKnown(id, known, restore);
+      setKnownIds((s) => {
+        const n = new Set(s);
+        if (known) n.add(id);
+        else n.delete(id);
+        return n;
+      });
+      // a known sentence doesn't need its "practice again" repeat at the end of the round
+      if (known) setCards((cs) => cs.filter((c, i) => i <= idx || c.item.id !== id));
+      return prev;
+    },
+    [cards, idx, store],
+  );
+
   const onNext = useCallback(() => {
     stop();
     if (idx + 1 < cards.length) setIdx(idx + 1);
@@ -130,7 +155,7 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
       </div>
     );
   }
-  if (phase === 'done') return <Summary results={results} onAgain={() => setRound((r) => r + 1)} />;
+  if (phase === 'done') return <Summary results={results} known={knownIds} onAgain={() => setRound((r) => r + 1)} />;
 
   const card = cards[idx];
   const roundPoints = results.reduce((s, r) => s + r.points, 0);
@@ -156,6 +181,7 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
         mode={mode}
         settings={settings}
         onAnswer={onAnswer}
+        onKnown={onKnown}
         onNext={onNext}
         isLast={idx + 1 >= cards.length}
         stage={store.progress.get(card.item.id)?.stage ?? 0}
@@ -207,10 +233,12 @@ interface CardProps {
   isLast: boolean;
   stage: number;
   onAnswer(correct: boolean, given: string, hint: boolean, usedMode: Mode): Promise<Outcome>;
+  /** mark as known (or undo); resolves with the record from before the change */
+  onKnown(known: boolean, restore: Progress | null): Promise<Progress | null>;
   onNext(): void;
 }
 
-function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onNext }: CardProps) {
+function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onNext }: CardProps) {
   const { item } = card;
   const [startStage] = useState(stage);
   const [given, setGiven] = useState('');
@@ -226,6 +254,17 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onNext }: Ca
   const nextRef = useRef<HTMLButtonElement>(null);
   const answeredAt = useRef(0);
   const answered = verdict !== null;
+  const [known, setKnown] = useState(false);
+  const [beforeKnown, setBeforeKnown] = useState<Progress | null>(null);
+  const toggleKnown = useCallback(async () => {
+    if (!known) {
+      setKnown(true);
+      setBeforeKnown(await onKnown(true, null));
+    } else {
+      setKnown(false);
+      await onKnown(false, beforeKnown);
+    }
+  }, [known, beforeKnown, onKnown]);
   const opts = useMemo(() => choices(item), [item]);
   const before = item.de.slice(0, item.c[0]);
   const after = item.de.slice(item.c[1]);
@@ -269,8 +308,8 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onNext }: Ca
   }, [answered]);
 
   // keyboard: 1–4 choose, Enter next, R replay
-  const keyState = useRef({ answered, opts, submit, onNext, speak, mode });
-  keyState.current = { answered, opts, submit, onNext, speak, mode };
+  const keyState = useRef({ answered, opts, submit, onNext, speak, mode, toggleKnown, outcome });
+  keyState.current = { answered, opts, submit, onNext, speak, mode, toggleKnown, outcome };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = keyState.current;
@@ -287,6 +326,9 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onNext }: Ca
       } else if (!inField && (e.key === 'r' || e.key === 'R')) {
         e.preventDefault();
         s.speak();
+      } else if (!inField && s.answered && s.outcome && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        s.toggleKnown();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -479,6 +521,27 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onNext }: Ca
               Sentence #{item.id} on Tatoeba
             </a>
           </div>
+          {outcome && (
+            <div className="known-row" aria-live="polite">
+              {known ? (
+                <>
+                  <span className="small">
+                    <IconCheck size={16} /> Marked as known — it won’t come back in reviews.
+                  </span>
+                  <button type="button" className="btn ghost" onClick={toggleKnown}>
+                    Undo
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="btn" onClick={toggleKnown} data-testid="known">
+                    <IconCheck size={18} /> I know this <span className="kbd">K</span>
+                  </button>
+                  <span className="tiny muted">Too easy? It won’t come back in reviews.</span>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -495,7 +558,7 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onNext }: Ca
 
 /* ------------------------------------------------------------------------ */
 
-function Summary({ results, onAgain }: { results: Result[]; onAgain(): void }) {
+function Summary({ results, known, onAgain }: { results: Result[]; known: Set<number>; onAgain(): void }) {
   const { settings, days, today } = useStore();
   useEffect(() => syncSoon(500), []);
   const first = results.filter((r) => !r.retry);
@@ -540,7 +603,10 @@ function Summary({ results, onAgain }: { results: Result[]; onAgain(): void }) {
                   <strong style={{ color: 'var(--accent)' }}>{r.item.a}</strong>
                   {r.item.de.slice(r.item.c[1])}
                 </div>
-                <div className="small muted">{r.item.en}</div>
+                <div className="small muted">
+                  {r.item.en}
+                  {known.has(r.item.id) && <span className="badge" style={{ marginLeft: 6 }}>known</span>}
+                </div>
               </div>
             </li>
           ))}

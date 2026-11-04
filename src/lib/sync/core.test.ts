@@ -97,6 +97,14 @@ describe('merge', () => {
   it('drops records answered before a reset', () => {
     expect(mergeProgress([p(1, 1, 100)], [p(2, 1, 300)], 200).map((x) => x.id)).toEqual([2]);
   });
+  it('carries the "known" mark through sync', async () => {
+    const { decodeProgress } = await import('./core');
+    const rows = decodeProgress(encodeProgress([p(1, 1, 5, 4, { known: true }), p(2, 1, 5)]), 1);
+    expect(rows.find((x) => x.id === 1)!.known).toBe(true);
+    expect(rows.find((x) => x.id === 2)!.known).toBeUndefined();
+    // old clients' rows (7 columns) still decode
+    expect(decodeProgress('[[3,1,1,1,0,1,1]]', 2)[0]).toEqual({ id: 3, lv: 2, stage: 1, due: 1, correct: 1, wrong: 0, first: 1, last: 1 });
+  });
   it('encodes canonically', () => {
     expect(encodeProgress([p(2, 1, 5), p(1, 1, 5)])).toBe(encodeProgress([p(1, 1, 5), p(2, 1, 5)]));
   });
