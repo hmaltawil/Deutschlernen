@@ -136,6 +136,7 @@ export async function startSync(existing?: string): Promise<string> {
   await setKv('sync', config);
   // a reset made before joining only applied to this device
   await setKv('resetAt', 0);
+  await setKv('levelResets', {});
   markDirty(allChunkIds(levels, manifest.version));
   set({ state: 'idle', code: config.code, lastSync: 0, error: undefined });
   await syncNow();
@@ -191,11 +192,12 @@ export function syncNow(): Promise<void> {
       settings: data.settings,
       settingsUpdated: data.settingsUpdated,
       resetAt: data.resetAt,
+      levelResets: data.levelResets,
       lastSeen: cfg.lastSeen,
       dirty: [...new Set([...Object.keys(dirtyMap), ...memSnapshot.keys()])],
     };
     const r = await (await getRemote()).transact(cfg.syncId, (tx) => syncOnce(local, tx, Date.now()));
-    await applySync(r);
+    await applySync(r, manifest.version);
     await clearDirty(dirtyMap, memSnapshot);
     if (config !== cfg) return; // turned off meanwhile
     cfg.lastSeen = r.lastSeen;

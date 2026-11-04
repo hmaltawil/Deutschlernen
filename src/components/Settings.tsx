@@ -150,7 +150,7 @@ export function SettingsPage({ joinCode }: { joinCode?: string }) {
       if (!confirm('Replace all progress on this device with this backup?')) return;
       setMsg('Restoring…');
       if (syncing) await syncNow(); // hear about a reset made on another device first
-      const { restored, dropped } = await importBackup(data, await levelIndex());
+      const { restored, dropped } = await importBackup(data, await levelIndex(), manifest?.version);
       await reload();
       resyncAll();
       const left = dropped ? ` (${dropped.toLocaleString()} no longer in the deck were left out)` : '';

@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { levelIndex, loadManifest, type Item, type Manifest } from './lib/deck';
-import { getKv, loadAll, migrateProgress, saveAnswer, saveProgress, saveSettings, setKv } from './lib/db';
+import { getKv, loadAll, migrateProgress, resetLevel as resetLevelDb, saveAnswer, saveProgress, saveSettings, setKv } from './lib/db';
+import { defaultPinned, homeLevels as homeLevelsOf, levelStats as levelStatsOf, withPinned, type LevelStat } from './lib/levels';
+import { currentLevel as currentLevelOf } from './lib/session';
 import { dayKey, emptyDay, withGoalChange, type DayStat } from './lib/scoring';
 import { isDue, isMastered, markKnown, newProgress, review, unmarkKnown, type Progress } from './lib/srs';
 import { DEFAULT_SETTINGS, deviceSettings, onlyDeviceSettings, type Settings } from './lib/settings';
@@ -29,6 +31,16 @@ interface Store {
   dueCount: number;
   playedPerLevel: Map<number, number>;
   masteredPerLevel: Map<number, number>;
+  /** per-level numbers for the level cards */
+  levelStats: Map<number, LevelStat>;
+  /** the level you are on (Home "Play" continues here) */
+  currentLevel: number;
+  /** levels shown on Home, most recently played first */
+  homeLevels: number[];
+  /** show or hide levels on Home */
+  pinLevels(levels: number[], on: boolean): void;
+  /** "Reset level": delete the progress of every sentence in the level (on all synced devices). Returns how many. */
+  resetLevel(lv: number): Promise<number>;
   /**
    * Record an answer. The new state is returned right away; `saved` settles when it is
    * stored on the device (the card never waits for it).
@@ -44,6 +56,11 @@ interface Store {
 }
 
 const Ctx = createContext<Store | null>(null);
+
+/** Entries of `a` that are newer than in `b` (so a reset made during a sync isn't forgotten). */
+function newerResets(a: Record<string, number>, b: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(Object.entries(a).filter(([c, t]) => t > (b[c] ?? 0)));
+}
 
 export function useStore(): Store {
   const s = useContext(Ctx);
@@ -66,6 +83,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const daysRef = useRef(ownDays);
   daysRef.current = ownDays;
   const deckVersionRef = useRef(1);
+  /** "Reset level" times known on this device (progress chunk id → ms) */
+  const levelResetsRef = useRef<Record<string, number>>({});
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
@@ -86,6 +105,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await setKv('deckVersion', m.version);
       }
       deckVersionRef.current = m.version;
+      levelResetsRef.current = data.levelResets;
       setManifest(m);
       setProgress(new Map(data.progress.map((p) => [p.id, p])));
       setOwnDays(new Map(data.days.map((d) => [d.date, d])));
@@ -111,14 +131,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       onSyncApplied((r) => {
         if (r.progressPut.length || r.progressDelete.length) {
           const p = new Map(progressRef.current);
-          for (const id of r.progressDelete) if ((p.get(id)?.last ?? 0) < r.resetAt) p.delete(id);
+          for (const id of r.progressDelete) {
+            const cur = p.get(id);
+            if (cur && cur.last < Math.max(r.resetAt, r.dropBefore[cur.lv] ?? 0)) p.delete(id);
+          }
           for (const x of r.progressPut) {
             const cur = p.get(x.id);
+            if (x.last < (levelResetsRef.current[progressChunk(x.lv, deckVersionRef.current)] ?? 0)) continue; // reset meanwhile
             if (!cur || !newer(cur, x)) p.set(x.id, x);
           }
           progressRef.current = p;
           setProgress(p);
         }
+        levelResetsRef.current = { ...r.levelResets, ...newerResets(levelResetsRef.current, r.levelResets) };
         if (r.ownDays) {
           const ds = new Map(r.ownDays.map((d) => [d.date, d]));
           daysRef.current = ds;
@@ -196,6 +221,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     else saveSettings(next, Date.now()).then(() => markDirty(['settings']), () => {});
   }, []);
 
+  const resetLevel = useCallback(async (lv: number) => {
+    const chunk = progressChunk(lv, deckVersionRef.current);
+    const t = Date.now();
+    const p = new Map(progressRef.current);
+    for (const [id, x] of p) if (x.lv === lv) p.delete(id);
+    progressRef.current = p;
+    levelResetsRef.current = { ...levelResetsRef.current, [chunk]: t };
+    setProgress(p);
+    setNow(t);
+    const removed = await resetLevelDb(lv, chunk, t);
+    markDirty([chunk]);
+    return removed;
+  }, []);
+
   const days = useMemo(() => {
     const all = sumDays([[...ownDays.values()], ...Object.values(otherDays)]);
     return new Map(all.map((d) => [d.date, d]));
@@ -210,8 +249,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       playedPerLevel.set(p.lv, (playedPerLevel.get(p.lv) ?? 0) + 1);
       if (isMastered(p)) masteredPerLevel.set(p.lv, (masteredPerLevel.get(p.lv) ?? 0) + 1);
     }
-    return { dueCount, playedPerLevel, masteredPerLevel };
+    return { dueCount, playedPerLevel, masteredPerLevel, levelStats: levelStatsOf(progress.values(), now) };
   }, [progress, now]);
+
+  const levelCount = manifest?.levels.length ?? 0;
+  const current = manifest ? currentLevelOf(derived.playedPerLevel, manifest.levels, settings.currentLevel) : 1;
+  const homeLevels = useMemo(
+    () => homeLevelsOf(settings.pinnedLevels, derived.levelStats, current, levelCount),
+    [settings.pinnedLevels, derived.levelStats, current, levelCount],
+  );
+  const fallbackPinned = useRef<number[]>([]);
+  fallbackPinned.current = defaultPinned(derived.levelStats, current);
+  const pinLevels = useCallback(
+    (levels: number[], on: boolean) => {
+      const next = withPinned(settingsRef.current.pinnedLevels, fallbackPinned.current, levels, on);
+      if (next) updateSettings({ pinnedLevels: next });
+    },
+    [updateSettings],
+  );
 
   const value: Store = {
     ready,
@@ -226,6 +281,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     recordAnswer,
     setKnown,
     updateSettings,
+    currentLevel: current,
+    homeLevels,
+    pinLevels,
+    resetLevel,
     reload,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

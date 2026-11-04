@@ -136,6 +136,27 @@ async function syncNowAndWait(page) {
   await C.page.waitForSelector('.hero');
   await C.page.screenshot({ path: path.join(OUT, 's-phone-home.png') });
 
+  // "Reset level" on A clears that level on the other devices and keeps the rest
+  const playedIn = async (page, lv) => {
+    await page.goto(URL0 + `#/levels/${lv}`);
+    await page.waitForSelector('h1');
+    return Number((await page.textContent('h1 + .small')).match(/(\d+)\/[\d,]+ played/)[1]);
+  };
+  const lv4 = await playedIn(A.page, 4);
+  await A.page.click('button:has-text("Reset level")');
+  await A.page.waitForSelector('text=/Level 4 was reset/');
+  await A.page.goto(URL0 + '#/settings');
+  await A.page.waitForSelector('[role=status]:has-text("Syncing")', { timeout: 5000 }).catch(() => {});
+  await waitSynced(A.page);
+  await syncNowAndWait(A.page);
+  await B.page.goto(URL0 + '#/settings');
+  await syncNowAndWait(B.page);
+  ok(lv4 > 0 && (await playedIn(B.page, 4)) === 0, `Reset Level 4 on A cleared its ${lv4} sentences on B`);
+  ok(Number(await stat(B.page, 'Sentences played')) === bOffline - lv4, 'the other levels stay on B');
+  await C.page.goto(URL0 + '#/settings');
+  await syncNowAndWait(C.page);
+  ok((await playedIn(C.page, 4)) === 0, '…and on the phone');
+
   // reset on A clears everyone
   await A.page.goto(URL0 + '#/settings');
   await A.page.click('button:text("Reset progress")');

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from '../settings';
 import { emptyDay, type DayStat } from '../scoring';
 import type { Progress } from '../srs';
-import { allChunkIds, applyResult, decodeDays, encodeProgress, mergeProgress, sumDays, syncOnce, type Chunk, type LocalState, type RemoteTx } from './core';
+import { allChunkIds, applyResult, decodeDays, decodeProgress, encodeProgress, mergeProgress, sumDays, syncOnce, type Chunk, type LocalState, type RemoteTx } from './core';
 import { formatCode, generateCode, normalizeCode, syncIdFor } from './code';
 
 /** In-memory server with transaction semantics: writes are applied only when the pass finishes. */
@@ -210,11 +210,56 @@ describe('two devices', () => {
     expect(Object.keys(days)).toEqual(['A']);
   });
 
+  it('"Reset level" on one device clears that level on the other and keeps the rest', async () => {
+    const remote = new FakeRemote();
+    let A = device('A', { progress: [p(1, 1, 1000), p(2, 2, 1000)], ownDays: [day('2026-11-03', 40)] });
+    let B = device('B', { progress: [p(3, 2, 1100)] });
+    A = await sync(remote, A, 1200);
+    B = await sync(remote, B, 1300);
+    A = await sync(remote, A, 1400);
+    expect(ids(A)).toEqual([1, 2, 3]);
+    // A resets level 2 at t=2000 (what the app does locally: drop the level's records, remember the time)
+    A = { ...A, progress: A.progress.filter((x) => x.lv !== 2), levelResets: { p2: 2000 }, dirty: ['p2'] };
+    A = await sync(remote, A, 2100);
+    expect(ids(A)).toEqual([1]);
+    B = await sync(remote, B, 2200);
+    expect(ids(B)).toEqual([1]);
+    expect(B.levelResets).toEqual({ p2: 2000 });
+    expect(totalPoints(B)).toBe(40); // points and streaks stay
+    // answers in level 2 after the reset sync normally
+    B = { ...B, progress: [...B.progress, p(4, 2, 2300)], dirty: ['p2'] };
+    B = await sync(remote, B, 2400);
+    A = await sync(remote, A, 2500);
+    expect(ids(A)).toEqual([1, 4]);
+  });
+
+  it('a device on an older version cannot bring a reset level back', async () => {
+    const remote = new FakeRemote();
+    let A = device('A', { progress: [p(1, 1, 1000), p(2, 2, 1000)] });
+    let B = device('B');
+    A = await sync(remote, A, 1100);
+    B = await sync(remote, B, 1200);
+    A = { ...A, progress: A.progress.filter((x) => x.lv !== 2), levelResets: { p2: 2000 }, dirty: ['p2'] };
+    A = await sync(remote, A, 2100);
+    // an old app version re-uploads the level and writes meta without levelResets
+    const meta = JSON.parse(remote.docs.get('meta')!.data);
+    delete meta.levelResets;
+    meta.versions.p2 = 3000;
+    remote.docs.set('meta', { v: 1, data: JSON.stringify(meta), updated: 3000 });
+    remote.docs.set('p2', { v: 1, data: encodeProgress([p(2, 2, 1000)]), updated: 3000 });
+    A = await sync(remote, A, 3100); // A still knows the reset: cleans the level and restores the mark
+    expect(ids(A)).toEqual([1]);
+    expect(JSON.parse(remote.docs.get('meta')!.data).levelResets).toEqual({ p2: 2000 });
+    expect(decodeProgress(remote.docs.get('p2')!.data, 2)).toEqual([]);
+    B = await sync(remote, B, 3200);
+    expect(ids(B)).toEqual([1]);
+  });
+
   it('local answers made while a sync was running are not overwritten', () => {
     const before = device('A', { progress: [p(1, 1, 1000, 1)] });
     const result = {
       progressPut: [p(1, 1, 900, 3)], progressDelete: [], ownDays: null, otherDays: {}, settings: null,
-      resetAt: 0, lastSeen: {}, wrote: [],
+      resetAt: 0, levelResets: {}, dropBefore: {}, lastSeen: {}, wrote: [],
     };
     const after = applyResult({ ...before, progress: [p(1, 1, 2000, 2)] }, result, []);
     expect(after.progress[0].stage).toBe(2);

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { applySync, db, exportBackup, importBackup, isConnectionLost, loadAll, migrateProgress, resetProgress, saveAnswer, saveSettings, setKv, validateBackup } from './db';
+import { applySync, db, exportBackup, importBackup, isConnectionLost, loadAll, migrateProgress, resetLevel, resetProgress, saveAnswer, saveSettings, setKv, validateBackup } from './db';
 import { newProgress, review } from './srs';
 import { allChunkIds, syncOnce, type Chunk, type LocalState } from './sync/core';
 import { emptyDay } from './scoring';
@@ -67,6 +67,25 @@ describe('db', () => {
     const all = await loadAll();
     expect(all.progress.map((p) => [p.id, p.lv]).sort()).toEqual([[10, 7], [11, 3]]);
     expect(all.settings).toMatchObject({ dailyGoal: 300, voice: 'de_DE-kerstin-low', theme: 'dark' });
+  });
+  it('"Reset level" deletes only that level, keeps points, and a later backup restore survives sync', async () => {
+    await resetProgress();
+    await setKv('resetAt', 0);
+    await setKv('levelResets', {});
+    await saveAnswer(newProgress(1, 4, 1000), { ...emptyDay('2026-11-04'), points: 4 });
+    await saveAnswer(newProgress(2, 4, 1000), { ...emptyDay('2026-11-04'), points: 8 });
+    await saveAnswer(newProgress(3, 5, 1000), { ...emptyDay('2026-11-04'), points: 12 });
+    const backup = await exportBackup();
+    expect(await resetLevel(4, 'v2p4', 5000)).toBe(2);
+    let all = await loadAll();
+    expect(all.progress.map((p) => p.id)).toEqual([3]);
+    expect(all.days[0].points).toBe(12); // points stay
+    expect(all.levelResets).toEqual({ v2p4: 5000 });
+    // restoring the backup brings level 4 back, dated just after the reset so sync keeps it
+    await importBackup(JSON.parse(JSON.stringify(backup)), new Map([[1, 4], [2, 4], [3, 5]]), 2);
+    all = await loadAll();
+    expect(all.progress.filter((p) => p.lv === 4).every((p) => p.last === 5001)).toBe(true);
+    expect(all.progress.find((p) => p.id === 3)!.last).toBe(1000);
   });
   it('rejects files that are not backups', () => {
     expect(() => validateBackup({ foo: 1 })).toThrow(/not a Lücke backup/);

@@ -60,13 +60,14 @@ src/lib/db.ts                IndexedDB ('luecke' v1: progress, days, kv) — eve
 src/lib/srs.ts               stages 0–4, intervals 1/7/30/120 days, "known" sentences (keep their stage)
 src/lib/session.ts           rounds (due reviews first, then new), currentLevel(), choices (seededRandom), requeue
 src/lib/scoring.ts           points, day stats, streaks, goal history (goalOn)
+src/lib/levels.ts            per-level numbers for the Home level cards, which levels show on Home
 src/lib/answer.ts            typed-answer checking (case-insensitive, ae/oe/ue/ss unless strict), onTrack()
 src/lib/audio/               index.ts (source chain, unlock), recordings.ts (bundles), piper.ts, webspeech.ts
 src/workers/                 piper.worker.ts (neural voice), recordings.worker.ts (writes bundles to OPFS)
 src/lib/offline.ts           service-worker registration, saving bundles, cleanup of old caches
 src/lib/sync/                code.ts (sync codes), core.ts (pure merge), firestore.ts, engine.ts, config.ts
 src/lib/startup.ts           startup timing marks (Settings → Startup time), afterFirstScreen()
-src/components/              Home, Play (card, summary), Levels, Stats, Settings, Sync, Credits, …
+src/components/              Home, LevelCard, Play (card, summary), Levels, Stats, Settings, Sync, Credits, …
 firestore.rules, firebase.json, tests/   Firestore security rules and their emulator tests
 tests/e2e/                   Playwright browser suites (README there)
 ```
@@ -145,8 +146,22 @@ runtime files under `/tts/<TTS_VERSION>/`. **Recordings are never put in Cache S
   other-device days become this device's own. Settings syncs first to learn about remote resets.
 - Dirty marks (`markDirty`) are stored and also kept in memory; every step of the chain catches errors,
   so one failed IndexedDB write can't block sync for the rest of the session.
+- **Reset level** (`resetLevel` in db.ts / store): deletes the level's progress records and stores
+  `levelResets[<chunk id>] = time` (kv and `meta.levelResets`); every device drops that level's answers
+  from before it (`SyncResult.dropBefore`). Each device keeps the times locally, so a device on an
+  older version that rewrites meta without them can't bring the old answers back. Points stay.
 - Triggers: start, ~15 s after changes, end of round, online/visibility changes, every 3 min while open.
 - Normal use is ~1% of the free daily quotas; the sync e2e suite writes ~150 docs per run.
+
+## Home level cards
+
+- Home shows one card per level in `settings.pinnedLevels` (synced; unset = every level with progress
+  plus the current level), most recently played first (`homeLevels()` in `src/lib/levels.ts`).
+- A level is added when you play new sentences from it (`pinLevels` in Play); "Remove from Home" takes it
+  off until you play it again or tap "Show on Home" on its level page.
+- `#/play?kind=new&level=N` plays only new sentences of level N (no walking on to the next level);
+  `#/play?kind=review&level=N` only its due reviews. Playing a level makes it the current level;
+  reviewing one doesn't.
 
 ## Hard-won lessons (don't regress these)
 

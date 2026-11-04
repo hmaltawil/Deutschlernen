@@ -1161,3 +1161,104 @@ table.data td:first-child {
   color: var(--bad);
   font-weight: 600;
 }
+
+/* ---------- level cards on Home ---------- */
+.btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+.level-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.level-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.level-card-head h2 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.level-badge {
+  font-size: 0.7rem;
+}
+.mini-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.mini-stats > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 6px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  text-align: center;
+}
+.mini-stats strong {
+  font-size: 1.2rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.mini-stats span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.level-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.menu-wrap {
+  position: relative;
+  flex: none;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow), 0 12px 32px rgb(0 0 0 / 18%);
+  display: flex;
+  flex-direction: column;
+}
+.menu > a,
+.menu > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  text-decoration: none;
+  text-align: left;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.menu > a:hover,
+.menu > button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.menu > .danger {
+  color: var(--bad);
+}
+.menu > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

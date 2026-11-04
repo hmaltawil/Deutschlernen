@@ -12,6 +12,7 @@
  *   days      each device owns its own entry; totals are the sum over devices
  *   settings  the most recently changed copy wins (device-only settings are never taken from it)
  *   reset     "reset progress" stores resetAt; anything older is dropped everywhere
+ *   level     "reset level" stores levelResets[chunk]; older answers in that level are dropped
  */
 import type { DayStat } from '../scoring';
 import { deviceSettings, type Settings } from '../settings';
@@ -33,6 +34,8 @@ export interface RemoteTx {
 interface Meta {
   versions: Record<string, number>;
   resetAt: number;
+  /** "Reset level": progress chunk id → time; answers in that level from before it are dropped everywhere */
+  levelResets?: Record<string, number>;
 }
 
 export interface LocalState {
@@ -46,6 +49,8 @@ export interface LocalState {
   settings: Settings;
   settingsUpdated: number;
   resetAt: number;
+  /** level resets this device knows about (progress chunk id → time) */
+  levelResets?: Record<string, number>;
   lastSeen: Record<string, number>;
   dirty: string[];
 }
@@ -59,6 +64,10 @@ export interface SyncResult {
   /** newer settings from another device */
   settings: { value: Settings; updated: number } | null;
   resetAt: number;
+  /** every level reset known after this sync (progress chunk id → time) */
+  levelResets: Record<string, number>;
+  /** per level of the current deck: answers from before this time were reset (delete them) */
+  dropBefore: Record<number, number>;
   lastSeen: Record<string, number>;
   wrote: string[];
 }
@@ -169,11 +178,20 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
   const remoteReset = (meta.resetAt ?? 0) > local.resetAt;
   const localReset = local.resetAt > (meta.resetAt ?? 0);
 
+  // level resets: newest per level wins (kept on each device too, so a device on an older
+  // version that rewrites meta without them can't bring the old answers back for good)
+  const remoteLR = meta.levelResets ?? {};
+  const localLR = local.levelResets ?? {};
+  const levelResets: Record<string, number> = { ...remoteLR };
+  for (const [c, t] of Object.entries(localLR)) if (t > (levelResets[c] ?? 0)) levelResets[c] = t;
+  const levelResetDiffers = (c: string) => (localLR[c] ?? 0) !== (remoteLR[c] ?? 0);
+  const metaMissesLevelResets = Object.entries(levelResets).some(([c, t]) => (remoteLR[c] ?? 0) !== t);
+
   const progressIds = local.levels.map((lv) => progressChunk(lv, local.deck));
   const all = [...progressIds, 'days', 'settings'];
   const dirty = new Set(local.dirty);
   const changedRemotely = (c: string) => (meta.versions[c] ?? 0) !== (local.lastSeen[c] ?? 0);
-  const toRead = all.filter((c) => remoteReset || localReset || dirty.has(c) || changedRemotely(c));
+  const toRead = all.filter((c) => remoteReset || localReset || dirty.has(c) || changedRemotely(c) || levelResetDiffers(c));
 
   // all reads first (transaction rule)
   const chunks = await Promise.all(toRead.map((c) => tx.get(c)));
@@ -186,6 +204,8 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
     otherDays: local.otherDays,
     settings: null,
     resetAt,
+    levelResets,
+    dropBefore: {},
     lastSeen: { ...meta.versions },
     wrote: [],
   };
@@ -200,11 +220,13 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
   }
   for (const lv of local.levels) {
     const id = progressChunk(lv, local.deck);
+    const before = Math.max(resetAt, levelResets[id] ?? 0);
+    if (before > resetAt) result.dropBefore[lv] = before;
     if (!remote.has(id)) continue;
     const mine = byLevel.get(lv) ?? [];
     const theirsChunk = remote.get(id) ?? null;
     const theirs = theirsChunk ? decodeProgress(theirsChunk.data, lv) : [];
-    const merged = mergeProgress(mine, theirs, resetAt);
+    const merged = mergeProgress(mine, theirs, before);
     const mineById = new Map(mine.map((p) => [p.id, p]));
     const mergedIds = new Set<number>();
     for (const p of merged) {
@@ -249,7 +271,7 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
   }
 
   // write changed chunks and the new versions
-  if (writes.length || localReset) {
+  if (writes.length || localReset || metaMissesLevelResets) {
     const versions = { ...meta.versions };
     for (const [id, data] of writes) {
       const ver = Math.max(now, (versions[id] ?? 0) + 1);
@@ -257,7 +279,7 @@ export async function syncOnce(local: LocalState, tx: RemoteTx, now: number): Pr
       tx.set(id, { v: FORMAT, data, updated: ver });
       result.wrote.push(id);
     }
-    tx.set('meta', { v: FORMAT, data: JSON.stringify({ versions, resetAt } satisfies Meta), updated: now });
+    tx.set('meta', { v: FORMAT, data: JSON.stringify({ versions, resetAt, levelResets } satisfies Meta), updated: now });
     result.lastSeen = versions;
   }
   return result;
@@ -281,6 +303,7 @@ export function applyResult(local: LocalState, r: SyncResult, synced: string[]):
     settings: r.settings ? r.settings.value : local.settings,
     settingsUpdated: r.settings ? r.settings.updated : local.settingsUpdated,
     resetAt: r.resetAt,
+    levelResets: r.levelResets,
     lastSeen: r.lastSeen,
     dirty: local.dirty.filter((c) => !synced.includes(c)),
   };

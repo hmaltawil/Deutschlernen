@@ -20,6 +20,8 @@ export interface Settings {
   autoSaveRecordings: boolean;
   /** the level you chose last; Home and Play continue from here */
   currentLevel?: number;
+  /** levels shown on Home (unset: every level you have played, plus the current one) */
+  pinnedLevels?: number[];
   /** Choose/Type: the speaker button works before answering (hearing the sentence gives the word away) */
   audioBeforeAnswer: boolean;
   /** Type/Listen: the box turns green/red while typing, depending on whether it matches so far */

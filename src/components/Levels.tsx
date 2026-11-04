@@ -3,7 +3,10 @@ import { levelSummary, loadLevel, type Item } from '../lib/deck';
 import { mastery, shownStage } from '../lib/srs';
 import { currentLevel } from '../lib/session';
 import { useStore } from '../store';
-import { IconArrowLeft, IconPlay } from './Icons';
+import { IconArrowLeft, IconCheck, IconPlay, IconReset } from './Icons';
+import { confirmResetLevel } from './LevelCard';
+import { useSync } from './Sync';
+import { statOf } from '../lib/levels';
 
 export function Levels() {
   const { manifest, playedPerLevel, masteredPerLevel, settings } = useStore();
@@ -58,7 +61,10 @@ const STAGE_COLOR = ['var(--m0)', 'var(--m1)', 'var(--m2)', 'var(--m3)', 'var(--
 type Filter = 'all' | 'played' | 'unplayed' | 'known';
 
 export function LevelDetail({ n }: { n: number }) {
-  const { manifest, progress, playedPerLevel, setKnown } = useStore();
+  const { manifest, progress, playedPerLevel, setKnown, levelStats, homeLevels, pinLevels, resetLevel } = useStore();
+  const sync = useSync();
+  const syncing = sync.state !== 'off' && sync.state !== 'unavailable';
+  const [msg, setMsg] = useState('');
   const [items, setItems] = useState<Item[] | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [limit, setLimit] = useState(60);
@@ -81,6 +87,12 @@ export function LevelDetail({ n }: { n: number }) {
   const info = manifest?.levels.find((l) => l.n === n);
   if (!info) return <div className="card">No such level.</div>;
   const played = playedPerLevel.get(n) ?? 0;
+  const due = statOf(levelStats, n).due;
+  const onHome = homeLevels.includes(n);
+  const reset = async () => {
+    const k = await confirmResetLevel(n, played, syncing, resetLevel);
+    if (k !== null) setMsg(`Level ${n} was reset: ${k.toLocaleString()} sentences are new again.`);
+  };
 
   return (
     <div className="stack" style={{ gap: 16 }}>
@@ -98,6 +110,27 @@ export function LevelDetail({ n }: { n: number }) {
           <IconPlay size={16} /> Play this level
         </a>
       </div>
+      <div className="row" style={{ gap: 8 }}>
+        <a
+          className="btn"
+          href={due > 0 ? `#/play?kind=review&level=${n}` : undefined}
+          aria-disabled={due === 0}
+          onClick={(e) => due === 0 && e.preventDefault()}
+        >
+          Review ({due.toLocaleString()})
+        </a>
+        <button className="btn" aria-pressed={onHome} onClick={() => pinLevels([n], !onHome)}>
+          {onHome ? <IconCheck size={16} /> : null} {onHome ? 'On Home' : 'Show on Home'}
+        </button>
+        <button className="btn ghost danger" onClick={reset} disabled={played === 0}>
+          <IconReset size={16} /> Reset level
+        </button>
+      </div>
+      {msg && (
+        <p className="small" role="status" style={{ margin: 0 }}>
+          {msg}
+        </p>
+      )}
       <div className="seg" role="group" aria-label="Filter sentences">
         {(['all', 'played', 'unplayed', 'known'] as Filter[]).map((f) => (
           <button key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>

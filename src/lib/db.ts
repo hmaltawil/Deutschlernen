@@ -3,14 +3,14 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Progress } from './srs';
 import type { DayStat } from './scoring';
 import { DEFAULT_SETTINGS, deviceSettings, type Settings } from './settings';
-import { newer, sumDays, type SyncResult } from './sync/core';
+import { newer, progressChunk, sumDays, type SyncResult } from './sync/core';
 
 interface LueckeDB extends DBSchema {
   progress: { key: number; value: Progress; indexes: { due: number } };
   /** this device's own daily stats */
   days: { key: string; value: DayStat };
   /**
-   * settings, device (id), settingsUpdated (ms), resetAt (ms),
+   * settings, device (id), settingsUpdated (ms), resetAt (ms), levelResets (chunk id → ms),
    * otherDays (other devices' daily stats, from sync), sync (sync config), syncDirty
    */
   kv: { key: string; value: unknown };
@@ -34,6 +34,8 @@ export interface LocalData {
   settings: Settings;
   settingsUpdated: number;
   resetAt: number;
+  /** "Reset level" times, by progress chunk id (see sync/core.ts) */
+  levelResets: Record<string, number>;
 }
 
 let dbp: Promise<IDBPDatabase<LueckeDB>> | null = null;
@@ -116,13 +118,14 @@ export async function deviceId(): Promise<string> {
 
 export async function loadAll(): Promise<LocalData> {
   return withDb(async (d) => {
-    const [progress, days, settings, otherDays, settingsUpdated, resetAt] = await Promise.all([
+    const [progress, days, settings, otherDays, settingsUpdated, resetAt, levelResets] = await Promise.all([
       d.getAll('progress'),
       d.getAll('days'),
       d.get('kv', 'settings') as Promise<Partial<Settings> | undefined>,
       d.get('kv', 'otherDays') as Promise<Record<string, DayStat[]> | undefined>,
       d.get('kv', 'settingsUpdated') as Promise<number | undefined>,
       d.get('kv', 'resetAt') as Promise<number | undefined>,
+      d.get('kv', 'levelResets') as Promise<Record<string, number> | undefined>,
     ]);
     return {
       progress,
@@ -131,6 +134,7 @@ export async function loadAll(): Promise<LocalData> {
       settings: { ...DEFAULT_SETTINGS, ...(settings ?? {}) },
       settingsUpdated: settingsUpdated ?? 0,
       resetAt: resetAt ?? 0,
+      levelResets: levelResets ?? {},
     };
   });
 }
@@ -163,15 +167,19 @@ export async function saveSettings(s: Settings, updated?: number): Promise<void>
  * Apply what a sync brought in. Guards against overwriting answers made on this
  * device while the sync was running.
  */
-export async function applySync(r: SyncResult): Promise<void> {
+export async function applySync(r: SyncResult, deck?: number): Promise<void> {
   return withDb(async (d) => {
     const tx = d.transaction(['progress', 'days', 'kv'], 'readwrite');
     const progress = tx.objectStore('progress');
+    const kv = tx.objectStore('kv');
+    // a "Reset level" made on this device while the sync was running
+    const localResets = ((await kv.get('levelResets')) ?? {}) as Record<string, number>;
     for (const id of r.progressDelete) {
       const cur = await progress.get(id);
-      if (cur && cur.last < r.resetAt) await progress.delete(id);
+      if (cur && cur.last < Math.max(r.resetAt, r.dropBefore[cur.lv] ?? 0)) await progress.delete(id);
     }
     for (const p of r.progressPut) {
+      if (p.last < (localResets[progressChunk(p.lv, deck)] ?? 0)) continue;
       const cur = await progress.get(p.id);
       if (!cur || !newer(cur, p)) await progress.put(p);
     }
@@ -179,9 +187,11 @@ export async function applySync(r: SyncResult): Promise<void> {
       await tx.objectStore('days').clear();
       for (const day of r.ownDays) await tx.objectStore('days').put(day);
     }
-    const kv = tx.objectStore('kv');
     await kv.put(r.otherDays, 'otherDays');
     await kv.put(r.resetAt, 'resetAt');
+    const merged = { ...r.levelResets };
+    for (const [c, t] of Object.entries(localResets)) if (t > (merged[c] ?? 0)) merged[c] = t;
+    await kv.put(merged, 'levelResets');
     if (r.settings) {
       // keep this device's own settings as they are now (they may have changed during the sync)
       const cur = ((await kv.get('settings')) ?? {}) as Partial<Settings>;
@@ -228,12 +238,13 @@ export interface ImportResult {
  *   other devices' daily stats from the backup are kept as this device's own.
  * - This device's own settings (voice, theme, auto-save) stay as they are.
  */
-export async function importBackup(raw: unknown, levelOf?: Map<number, number>): Promise<ImportResult> {
+export async function importBackup(raw: unknown, levelOf?: Map<number, number>, deck?: number): Promise<ImportResult> {
   const b = validateBackup(raw);
   return withDb(async (d) => {
     const tx = d.transaction(['progress', 'days', 'kv'], 'readwrite');
     const kv = tx.objectStore('kv');
     const resetAt = ((await kv.get('resetAt')) as number | undefined) ?? 0;
+    const levelResets = ((await kv.get('levelResets')) ?? {}) as Record<string, number>;
     const cur = ((await kv.get('settings')) ?? {}) as Partial<Settings>;
     await Promise.all([tx.objectStore('progress').clear(), tx.objectStore('days').clear()]);
     let restored = 0;
@@ -244,7 +255,8 @@ export async function importBackup(raw: unknown, levelOf?: Map<number, number>):
         dropped++;
         continue;
       }
-      const last = (p.last ?? 0) < resetAt ? resetAt + 1 : p.last;
+      const before = Math.max(resetAt, levelResets[progressChunk(lv, deck)] ?? 0); // also "Reset level"
+      const last = (p.last ?? 0) < before ? before + 1 : p.last;
       tx.objectStore('progress').put({ ...p, lv, last });
       restored++;
     }
@@ -270,6 +282,28 @@ export async function resetProgress(): Promise<void> {
       tx.objectStore('kv').put(Date.now(), 'resetAt'),
       tx.done,
     ]);
+  });
+}
+
+/**
+ * "Reset level": delete this device's progress on every sentence of level `lv` and remember
+ * when (under the level's sync chunk id), so sync drops the older answers on every device.
+ * Points and streaks stay. Returns how many sentences were reset.
+ */
+export async function resetLevel(lv: number, chunk: string, at = Date.now()): Promise<number> {
+  return withDb(async (d) => {
+    const tx = d.transaction(['progress', 'kv'], 'readwrite');
+    let removed = 0;
+    for (const p of await tx.objectStore('progress').getAll()) {
+      if (p.lv !== lv) continue;
+      await tx.objectStore('progress').delete(p.id);
+      removed++;
+    }
+    const kv = tx.objectStore('kv');
+    const levelResets = ((await kv.get('levelResets')) ?? {}) as Record<string, number>;
+    await kv.put({ ...levelResets, [chunk]: at }, 'levelResets');
+    await tx.done;
+    return removed;
   });
 }
 

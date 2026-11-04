@@ -45,9 +45,10 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
   const [combo, setCombo] = useState(0);
   const [err, setErr] = useState('');
 
-  // starting a level from the Levels page makes it your current level (shown on Home)
+  // playing a level (from its card or the Levels page) makes it your current level;
+  // reviewing one doesn't
   useEffect(() => {
-    if (level && level !== settings.currentLevel) store.updateSettings({ currentLevel: level });
+    if (level && kind !== 'review' && level !== settings.currentLevel) store.updateSettings({ currentLevel: level });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level]);
 
@@ -60,14 +61,17 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
     (async () => {
       const now = Date.now();
       const prog = progressRef.current;
-      const reviews = pickReviews(prog.values(), now, settings.roundSize, kind);
+      // with a level: only that level's reviews and new sentences
+      const pool = level ? [...prog.values()].filter((p) => p.lv === level) : prog.values();
+      const reviews = pickReviews(pool, now, settings.roundSize, kind);
       const reviewItems = await getItems(reviews);
       const need = kind === 'review' ? 0 : settings.roundSize - reviewItems.length;
       const played = new Map<number, number>();
       for (const p of prog.values()) played.set(p.lv, (played.get(p.lv) ?? 0) + 1);
       const from = level ?? currentLevel(played, manifest.levels, settings.currentLevel);
-      const fresh = need > 0 ? await pickNew(prog, need, from, manifest.levels.length, loadLevel) : [];
+      const fresh = need > 0 ? await pickNew(prog, need, from, level ?? manifest.levels.length, loadLevel) : [];
       if (cancelled) return;
+      store.pinLevels([...new Set(fresh.map((x) => x.lv))], true); // levels you play show on Home
       const c = makeCards(reviewItems, fresh);
       setCards(c);
       setIdx(0);
@@ -138,9 +142,12 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
   if (phase === 'loading') return <div className="spinner" aria-label="Loading" />;
   if (phase === 'error') return <div className="card">Could not load sentences: {err}</div>;
   if (phase === 'empty') {
+    const where = level ? ` in Level ${level}` : '';
+    const due = level ? (store.levelStats.get(level)?.due ?? 0) : 0;
+    const last = manifest ? manifest.levels.length : 30;
     return (
       <div className="card stack center">
-        <h2>{kind === 'review' ? 'Nothing to review right now' : 'You have played every sentence!'}</h2>
+        <h2>{kind === 'review' ? `Nothing to review${where} right now` : level ? `You have played every sentence in Level ${level}!` : 'You have played every sentence!'}</h2>
         <p className="muted">
           {kind === 'review' ? 'Reviews come back as their intervals run out.' : 'Keep reviewing to reach 100% mastery.'}
         </p>
@@ -149,8 +156,18 @@ export function Play({ kind, level }: { kind: RoundKind; level?: number }) {
             Home
           </a>
           {kind === 'review' && (
-            <a className="btn primary" href="#/play?kind=new">
-              Learn new sentences
+            <a className="btn primary" href={level ? `#/play?kind=new&level=${level}` : '#/play?kind=new'}>
+              {level ? `Play Level ${level}` : 'Learn new sentences'}
+            </a>
+          )}
+          {kind !== 'review' && level && due > 0 && (
+            <a className="btn primary" href={`#/play?kind=review&level=${level}`}>
+              Review ({due})
+            </a>
+          )}
+          {kind !== 'review' && level && level < last && (
+            <a className="btn" href={`#/play?kind=new&level=${level + 1}`}>
+              Play Level {level + 1}
             </a>
           )}
         </div>

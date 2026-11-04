@@ -109,3 +109,25 @@ export const IconMic = (p: P) => (
     <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
   </Svg>
 );
+
+export const IconMore = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none" />
+  </Svg>
+);
+
+export const IconReset = (p: P) => (
+  <Svg {...p}>
+    <path d="M3 12a9 9 0 1 0 2.64-6.36" />
+    <path d="M3 4v5h5" />
+  </Svg>
+);
+
+export const IconHide = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M8 12h8" />
+  </Svg>
+);

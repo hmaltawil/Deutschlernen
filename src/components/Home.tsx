@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
 import { streaks } from '../lib/scoring';
-import { currentLevel, type Mode } from '../lib/session';
+import type { Mode } from '../lib/session';
 import { isMastered } from '../lib/srs';
-import { levelSummary } from '../lib/deck';
+import { statOf } from '../lib/levels';
 import { useStore } from '../store';
 import { IconClock, IconFlame, IconHeadphones, IconKeyboard, IconList, IconPlay } from './Icons';
 import { Ring } from './Ring';
 import { VoiceBanner } from './VoiceBanner';
+import { LevelCard } from './LevelCard';
+import { useSync } from './Sync';
 
 export const MODES: { id: Mode; label: string; desc: string; icon: JSX.Element }[] = [
   { id: 'mc', label: 'Choose', desc: 'Pick the missing word from four options · 4 pts', icon: <IconList size={16} /> },
@@ -33,15 +35,13 @@ export function ModePicker() {
 }
 
 export function Home() {
-  const { manifest, settings, days, today, dueCount, progress, playedPerLevel, masteredPerLevel } = useStore();
+  const { manifest, settings, days, today, dueCount, progress, levelStats, homeLevels, currentLevel } = useStore();
+  const sync = useSync();
+  const syncing = sync.state !== 'off' && sync.state !== 'unavailable';
   const pts = days.get(today)?.points ?? 0;
   const streak = useMemo(() => streaks(days.values(), settings.dailyGoal, today, settings.goalHistory), [days, settings.dailyGoal, today, settings.goalHistory]);
   const mastered = useMemo(() => [...progress.values()].filter(isMastered).length, [progress]);
   if (!manifest) return null;
-  const lv = currentLevel(playedPerLevel, manifest.levels, settings.currentLevel);
-  const info = manifest.levels[lv - 1];
-  const played = playedPerLevel.get(lv) ?? 0;
-  const lvMastered = masteredPerLevel.get(lv) ?? 0;
   const goalLeft = Math.max(settings.dailyGoal - pts, 0);
 
   return (
@@ -98,36 +98,23 @@ export function Home() {
         </div>
       </section>
 
-      {info && (
-        <section className="card stack" style={{ gap: 10 }} data-testid="current-level">
-          <div className="spread">
-            <h2>
-              <span className="tiny muted" style={{ display: 'block', fontWeight: 500 }}>
-                Your level
-              </span>
-              Level {lv}
-            </h2>
-            <div className="row" style={{ gap: 6 }}>
-              <a className="btn ghost" style={{ minHeight: 36, padding: '6px 10px' }} href={`#/levels/${lv}`}>
-                Sentences
-              </a>
-              <a className="btn" style={{ minHeight: 36, padding: '6px 12px' }} href="#/levels">
-                Change level
-              </a>
-            </div>
+      <section className="stack" style={{ gap: 12 }} data-testid="your-levels">
+        <div className="spread">
+          <h2>Your levels</h2>
+          <a className="btn ghost" style={{ minHeight: 36, padding: '6px 10px' }} href="#/levels">
+            All levels
+          </a>
+        </div>
+        {homeLevels.length ? (
+          homeLevels.map((n) => (
+            <LevelCard key={n} info={manifest.levels[n - 1]} stat={statOf(levelStats, n)} isCurrent={n === currentLevel} syncing={syncing} />
+          ))
+        ) : (
+          <div className="card small muted">
+            No levels here. Open <a href="#/levels">Levels</a> and play one — levels you play show up here.
           </div>
-          <span className="small muted">{levelSummary(info)}</span>
-          <div className="meter" aria-label={`${played} of ${info.count} played`}>
-            <span style={{ width: `${(played / info.count) * 100}%` }} />
-          </div>
-          <div className="spread small muted">
-            <span>
-              {played} / {info.count} played · {lvMastered} mastered
-            </span>
-            <span>{Math.round((info.audio / info.count) * 100)}% recorded by native speakers</span>
-          </div>
-        </section>
-      )}
+        )}
+      </section>
 
       <section className="tiles">
         <div className="tile">
