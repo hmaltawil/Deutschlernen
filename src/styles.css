@@ -572,6 +572,8 @@ h3 {
   padding: 0 4px;
   border-radius: 4px;
   font-weight: 700;
+  -webkit-hyphens: auto;
+  hyphens: auto;
 }
 .filled.ok {
   background: var(--good-soft);
@@ -582,6 +584,7 @@ h3 {
   color: var(--bad);
 }
 .struck {
+  overflow-wrap: anywhere;
   text-decoration: line-through;
   color: var(--bad);
   font-size: 0.9rem;
@@ -601,19 +604,27 @@ h3 {
 }
 .choices {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, …) lets columns shrink below the width of a long word */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 20px;
 }
+/* long words (German compounds) get one option per row on phones */
+@media (max-width: 560px) {
+  .choices.long {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media (max-width: 380px) {
   .choices {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 .choice {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   text-align: left;
   border: 1.5px solid var(--line);
   background: var(--surface);
@@ -668,8 +679,17 @@ h3 {
 .verdict {
   font-weight: 700;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+}
+.verdict > * {
+  min-width: 0;
 }
 .verdict.ok {
   color: var(--good);
@@ -1085,4 +1105,15 @@ table.data td:first-child {
   gap: 6px;
   color: var(--good);
   font-weight: 600;
+}
+
+/* a word that still doesn't fit wraps (hyphenated where the browser knows German) instead of overflowing */
+.choice-word {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+}
+.choice .kbd {
+  flex: none;
 }

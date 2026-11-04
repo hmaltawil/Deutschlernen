@@ -450,13 +450,13 @@ function ClozeCard({ card, mode, settings, isLast, stage, onAnswer, onKnown, onN
       )}
 
       {mode === 'mc' && (
-        <div className="choices" role="group" aria-label="Choices">
+        <div className={`choices ${Math.max(...opts.map((o) => o.length)) >= 11 ? 'long' : ''}`} role="group" aria-label="Choices">
           {opts.map((o, i) => {
             const cls = !answered ? '' : o === item.a ? 'ok' : o === chosen ? 'bad' : 'dim';
             return (
               <button key={o} type="button" className={`choice ${cls}`} disabled={answered} onClick={() => submit(o, true)} lang="de">
                 <span className="kbd">{i + 1}</span>
-                {o}
+                <span className="choice-word">{o}</span>
               </button>
             );
           })}
