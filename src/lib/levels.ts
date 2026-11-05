@@ -43,10 +43,10 @@ export function defaultPinned(stats: Map<number, LevelStat>, current: number): n
   return [...new Set([...stats.keys(), current])].sort((a, b) => a - b);
 }
 
-/** Levels shown on Home, most recently played first (never-played ones last, in level order). */
+/** Levels shown on Home, in level order. */
 export function homeLevels(pinned: number[] | undefined, stats: Map<number, LevelStat>, current: number, levelCount: number): number[] {
   const list = [...new Set(pinned ?? defaultPinned(stats, current))].filter((lv) => lv >= 1 && lv <= levelCount);
-  return list.sort((a, b) => statOf(stats, b).lastPlayed - statOf(stats, a).lastPlayed || a - b);
+  return list.sort((a, b) => a - b);
 }
 
 /** The pinned list after adding/removing levels; null if nothing changes. */

@@ -36,7 +36,7 @@ interface Store {
   levelStats: Map<number, LevelStat>;
   /** the level you are on (Home "Play" continues here) */
   currentLevel: number;
-  /** levels shown on Home, most recently played first */
+  /** levels shown on Home, in level order */
   homeLevels: number[];
   /** show or hide levels on Home */
   pinLevels(levels: number[], on: boolean): void;

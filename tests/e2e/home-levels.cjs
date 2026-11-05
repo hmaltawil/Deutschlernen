@@ -1,4 +1,4 @@
-// Level cards on Home: levels you play appear (most recent first) with today's numbers,
+// Level cards on Home: levels you play appear (in level order) with today's numbers,
 // Play / Review only that level, "Remove from Home" / "Show on Home", and "Reset level".
 const { chromium } = require('playwright');
 const path = require('path');
@@ -65,7 +65,7 @@ const ok = (c, m) => (console.log(`${c ? 'PASS' : 'FAIL'}  ${m}`), c || failed++
   const l3 = await playRound([0]);
   ok(l3.length === 6 && l3.every((lv) => lv === 3), `"Play this level" plays only level 3 (${l3.join(',')})`);
   await home();
-  ok(JSON.stringify(await cards()) === '[3,1]', `Level 3 now shows first (cards: ${await cards()})`);
+  ok(JSON.stringify(await cards()) === '[1,3]', `Level 3 joins Level 1, in level order (cards: ${await cards()})`);
   ok((await stat(3, 'new today')) === 5 && (await stat(3, 'due')) === 1, 'Level 3 card: 5 new today, 1 due');
   ok((await playedText(3)).startsWith('5 / 1,090'), `Level 3 card: ${await playedText(3)}`);
   ok(((await page.textContent('[data-testid=current-level] h2')) || '').includes('Level 3'), 'Level 3 is marked as your level');

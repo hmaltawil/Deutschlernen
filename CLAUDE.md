@@ -186,7 +186,8 @@ runtime files under `/tts/<TTS_VERSION>/`. **Recordings are never put in Cache S
 ## Home level cards
 
 - Home shows one card per level in `settings.pinnedLevels` (synced; unset = every level with progress
-  plus the current level), most recently played first (`homeLevels()` in `src/lib/levels.ts`).
+  plus the current level), in level order (`homeLevels()` in `src/lib/levels.ts`; the owner asked for
+  this instead of most recently played first).
 - A level is added when you play new sentences from it (`pinLevels` in Play); "Remove from Home" takes it
   off until you play it again or tap "Show on Home" on its level page.
 - `#/play?kind=new&level=N` plays only new sentences of level N (no walking on to the next level);

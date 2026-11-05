@@ -26,13 +26,13 @@ describe('level stats', () => {
 
 describe('levels on Home', () => {
   const stats = levelStats([newProgress(1, 2, 1000), newProgress(2, 5, 3000), newProgress(3, 9, 2000)], NOW);
-  it('by default shows every played level plus the current one, most recently played first', () => {
+  it('by default shows every played level plus the current one, in level order', () => {
     expect(defaultPinned(stats, 10)).toEqual([2, 5, 9, 10]);
-    expect(homeLevels(undefined, stats, 10, 30)).toEqual([5, 9, 2, 10]);
-    expect(homeLevels(undefined, stats, 5, 30)).toEqual([5, 9, 2]);
+    expect(homeLevels(undefined, stats, 10, 30)).toEqual([2, 5, 9, 10]);
+    expect(homeLevels(undefined, stats, 5, 30)).toEqual([2, 5, 9]);
   });
-  it('shows exactly the chosen levels once the list was changed', () => {
-    expect(homeLevels([9, 2], stats, 10, 30)).toEqual([9, 2]);
+  it('shows exactly the chosen levels once the list was changed, in level order', () => {
+    expect(homeLevels([9, 2], stats, 10, 30)).toEqual([2, 9]);
     expect(homeLevels([], stats, 10, 30)).toEqual([]);
     expect(homeLevels([2, 31], stats, 10, 30)).toEqual([2]); // not in the deck
   });

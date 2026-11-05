@@ -22,7 +22,7 @@ and prints `PASS`/`FAIL` lines; it exits non-zero on failure. Screenshots go to
 | `modes.cjs` | Choose / Type / Listen: after an answer the card shows points, mastery, "I know this", and audio plays |
 | `options.cjs` | Settings → While you answer: speaker hidden before answering (and the option to show it), colour hint while typing, ä ö ü ß buttons (off by default), same-size box, strict ä/ö/ü/ß, second try for small typos |
 | `update.cjs` | A new version (simulated by changing `dist/sw.js`) never reloads the page during a round; it loads when you leave the round or tap "Next round", and right away on Home. Local preview only |
-| `home-levels.cjs` | Level cards on Home: levels you play appear (most recent first) with today's numbers; Play / Review only that level; Remove from Home / Show on Home; Reset level (progress gone, other levels and points kept) |
+| `home-levels.cjs` | Level cards on Home: levels you play appear (in level order) with today's numbers; Play / Review only that level; Remove from Home / Show on Home; Reset level (progress gone, other levels and points kept) |
 | `practice.cjs` | Word info after answering (and switching it off), favourites (F key, list page, favourites round), Often missed, loop audio and Stop, Dictate mode |
 | `known.cjs` | "I know this" (button, K key, undo, no re-ask, Known filter, Review again) and "your level" on Home |
 | `migrate.cjs` | Progress from an older deck is re-filed under the new levels once |
