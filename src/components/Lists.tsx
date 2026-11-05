@@ -4,6 +4,7 @@ import { favoriteRefs, oftenMissed } from '../lib/lists';
 import { useStore } from '../store';
 import { IconArrowLeft, IconPlay, IconStar, IconX } from './Icons';
 import { SentenceRow } from './SentenceRow';
+import { count } from '../lib/text';
 
 export type ListKind = 'fav' | 'missed';
 
@@ -30,7 +31,7 @@ export function ListsCard() {
           <a href={`#/list/${kind}`} style={{ color: 'inherit', textDecoration: 'none' }}>
             <strong>{TITLE[kind]}</strong>
             <span className="small muted" style={{ display: 'block' }}>
-              {n.toLocaleString()} sentence{n === 1 ? '' : 's'}
+              {count(n, 'sentence')}
             </span>
           </a>
           <a
@@ -74,7 +75,7 @@ export function ListPage({ kind }: { kind: ListKind }) {
       <div className="spread">
         <div>
           <h1>{TITLE[kind]}</h1>
-          <div className="small muted">{refs.length.toLocaleString()} sentences</div>
+          <div className="small muted">{count(refs.length, 'sentence')}</div>
         </div>
         {refs.length > 0 && (
           <a className="btn primary" href={`#/play?kind=${kind}`}>

@@ -3,6 +3,7 @@ import { streaks } from '../lib/scoring';
 import type { Mode } from '../lib/session';
 import { isMastered } from '../lib/srs';
 import { statOf } from '../lib/levels';
+import { noun } from '../lib/text';
 import { useStore } from '../store';
 import { IconClock, IconFlame, IconHeadphones, IconKeyboard, IconList, IconPen, IconPlay } from './Icons';
 import { Ring } from './Ring';
@@ -137,7 +138,7 @@ export function Home() {
         <div className="tile">
           <div className="label">Best streak</div>
           <div className="value">{streak.best}</div>
-          <div className="sub">days</div>
+          <div className="sub">{noun(streak.best, 'day')}</div>
         </div>
       </section>
     </div>

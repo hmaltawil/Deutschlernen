@@ -13,6 +13,7 @@ import { Ring } from './Ring';
 import { syncSoon } from '../lib/sync/engine';
 import { applyUpdateIfReady, ensureLevelSaved } from '../lib/offline';
 import { loadWords } from '../lib/words';
+import { count } from '../lib/text';
 import { favoriteRefs, oftenMissed } from '../lib/lists';
 import { WordBox } from './WordBox';
 
@@ -822,7 +823,7 @@ function Summary({ results, known, onAgain }: { results: Result[]; known: Set<nu
         <div className="stack" style={{ gap: 4 }}>
           <h1>Runde geschafft!</h1>
           <div className="muted">
-            +{points} points · {correct}/{first.length} correct · {fresh} new · {first.length - fresh} reviews
+            +{count(points, 'point')} · {correct}/{first.length}{'\u00a0'}correct · {fresh}{'\u00a0'}new · {count(first.length - fresh, 'review')}
           </div>
           {todayPts >= settings.dailyGoal && <div className="small">Daily goal reached — streak extended.</div>}
         </div>

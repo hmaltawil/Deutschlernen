@@ -7,6 +7,7 @@ import { confirmResetLevel } from './LevelCard';
 import { SentenceRow } from './SentenceRow';
 import { useSync } from './Sync';
 import { statOf } from '../lib/levels';
+import { count } from '../lib/text';
 
 export function Levels() {
   const { manifest, playedPerLevel, masteredPerLevel, settings } = useStore();
@@ -92,7 +93,7 @@ export function LevelDetail({ n }: { n: number }) {
   const onHome = homeLevels.includes(n);
   const reset = async () => {
     const k = await confirmResetLevel(n, played, syncing, resetLevel);
-    if (k !== null) setMsg(`Level ${n} was reset: ${k.toLocaleString()} sentences are new again.`);
+    if (k !== null) setMsg(`Level ${n} was reset: ${count(k, 'sentence is', 'sentences are')} new again.`);
   };
 
   return (

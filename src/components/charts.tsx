@@ -31,19 +31,21 @@ export interface Datum {
   detail?: string;
 }
 
-/** Single-series column chart: thin columns, 4px rounded caps, hairline grid, hover/focus tooltip. */
+/**
+ * Single-series column chart: thin columns, 4px rounded caps, hairline grid, hover/focus tooltip.
+ * No text is drawn inside the plot (it ended up on top of columns); name the goal and today's
+ * value in the chart's subtitle instead.
+ */
 export function ColumnChart({
   data,
   goal,
   unit,
   height = 180,
-  labelLast = true,
 }: {
   data: Datum[];
   goal?: number;
   unit: string;
   height?: number;
-  labelLast?: boolean;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
@@ -70,7 +72,7 @@ export function ColumnChart({
   };
 
   const hv = hover !== null ? data[hover] : null;
-  const last = data[data.length - 1];
+
   return (
     <div className="chart" ref={ref}>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${unit} chart`}>
@@ -82,14 +84,7 @@ export function ColumnChart({
             </text>
           </g>
         ))}
-        {goal !== undefined && goal > 0 && (
-          <g>
-            <line className="goal-line" x1={padL} x2={width - padR} y1={y(goal)} y2={y(goal)} />
-            <text className="goal-label" x={width - padR} y={y(goal) - 5} textAnchor="end">
-              goal {fmt(goal)}
-            </text>
-          </g>
-        )}
+        {goal !== undefined && goal > 0 && <line className="goal-line" x1={padL} x2={width - padR} y1={y(goal)} y2={y(goal)} />}
         {data.map((d, i) => {
           const x = padL + i * band + (band - barW) / 2;
           return (
@@ -116,21 +111,10 @@ export function ColumnChart({
             </g>
           );
         })}
-        {labelLast && last && last.value > 0 && (
-          <text
-            className="goal-label"
-            x={padL + (data.length - 1) * band + band / 2}
-            y={y(last.value) - 5}
-            textAnchor="end"
-            style={{ fill: 'var(--ink)' }}
-          >
-            {fmt(last.value)}
-          </text>
-        )}
       </svg>
       {hv && hover !== null && (
         <div className="tooltip" style={{ left: padL + hover * band + band / 2, top: y(hv.value) }}>
-          <strong>{fmt(hv.value)}</strong> {unit}
+          <strong>{fmt(hv.value)}</strong> {hv.value === 1 ? unit.replace(/s$/, '') : unit}
           <div>{hv.label}</div>
           {hv.detail && <div style={{ opacity: 0.8 }}>{hv.detail}</div>}
         </div>

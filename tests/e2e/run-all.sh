@@ -24,7 +24,7 @@ if [[ "$URL" == http://localhost* ]]; then
   for _ in $(seq 1 40); do curl -s -o /dev/null "$URL" && break; sleep 0.5; done
 fi
 
-suites=(main modes options practice known home-levels migrate recordings offline update layout-choices layout-feedback layout-typing)
+suites=(main modes options practice known home-levels migrate recordings offline update layout-choices layout-feedback layout-typing layout-stats)
 [[ $SYNC == 1 ]] && suites+=(sync)
 
 failed=()

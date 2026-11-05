@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { levelSummary, type LevelInfo } from '../lib/deck';
 import type { LevelStat } from '../lib/levels';
 import { useStore } from '../store';
+import { count } from '../lib/text';
 import { IconHide, IconList, IconMore, IconPlay, IconReset } from './Icons';
 
 /** Share of a level as a percentage: one decimal below 10% ("0.5%", "2.0%"), whole numbers above. */
@@ -15,7 +16,7 @@ export function percent(n: number, of: number): string {
 export async function confirmResetLevel(n: number, played: number, syncing: boolean, reset: (lv: number) => Promise<number>) {
   const where = syncing ? ' on all your synced devices' : '';
   const ok = confirm(
-    `Reset Level ${n}?\n\nYour progress on its ${played.toLocaleString()} played sentences (including “known” marks) will be deleted${where}, so they come back as new. Points and streaks stay.`,
+    `Reset Level ${n}?\n\nYour progress on its ${count(played, 'played sentence')} (including “known” marks) will be deleted${where}, so they come back as new. Points and streaks stay.`,
   );
   return ok ? reset(n) : null;
 }
@@ -43,7 +44,7 @@ export function LevelCard({ info, stat, isCurrent, syncing }: { info: LevelInfo;
   const reset = async () => {
     setMenu(false);
     const k = await confirmResetLevel(n, stat.played, syncing, resetLevel);
-    if (k !== null) setMsg(`Level ${n} was reset: ${k.toLocaleString()} sentences are new again.`);
+    if (k !== null) setMsg(`Level ${n} was reset: ${count(k, 'sentence is', 'sentences are')} new again.`);
   };
 
   const done = stat.played >= info.count;

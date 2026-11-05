@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { exportBackup, importBackup, resetProgress, validateBackup } from '../lib/db';
 import { levelIndex } from '../lib/deck';
+import { count } from '../lib/text';
 import { piper, speakText } from '../lib/audio';
 import { DEFAULT_SETTINGS, VOICES, type Theme } from '../lib/settings';
 import { useStore } from '../store';
@@ -140,7 +141,7 @@ export function SettingsPage({ joinCode }: { joinCode?: string }) {
     a.download = `luecke-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    setMsg(`Exported ${b.progress.length.toLocaleString()} sentences.`);
+    setMsg(`Exported ${count(b.progress.length, 'sentence')}.`);
   };
 
   const doImport = async (f: File) => {
@@ -155,7 +156,7 @@ export function SettingsPage({ joinCode }: { joinCode?: string }) {
       resyncAll();
       const left = dropped ? ` (${dropped.toLocaleString()} no longer in the deck were left out)` : '';
       setMsg(
-        `Backup restored: ${restored.toLocaleString()} sentences${left}` +
+        `Backup restored: ${count(restored, 'sentence')}${left}` +
           (syncing ? ', combined with your synced progress.' : '.'),
       );
     } catch (e) {

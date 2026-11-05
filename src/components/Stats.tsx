@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { addDays, dayKey, streaks } from '../lib/scoring';
 import { shownStage } from '../lib/srs';
+import { count, noun } from '../lib/text';
 import { useStore } from '../store';
 import { ColumnChart, SegmentedBar, type Datum } from './charts';
 
@@ -83,12 +84,12 @@ export function Stats() {
         <div className="tile">
           <div className="label">Current streak</div>
           <div className="value">{streak.current}</div>
-          <div className="sub">{streak.todayMet ? 'goal met today' : 'days · play to extend'}</div>
+          <div className="sub">{streak.todayMet ? 'goal met today' : `${noun(streak.current, 'day')} · play to extend`}</div>
         </div>
         <div className="tile">
           <div className="label">Best streak</div>
           <div className="value">{streak.best}</div>
-          <div className="sub">days</div>
+          <div className="sub">{noun(streak.best, 'day')}</div>
         </div>
         <div className="tile">
           <div className="label">Points this week</div>
@@ -99,7 +100,7 @@ export function Stats() {
           <div className="label">Accuracy</div>
           <div className="value">{totals.accuracy === null ? '—' : `${totals.accuracy}%`}</div>
           <div className="sub">
-            {totals.correct.toLocaleString()} of {(totals.correct + totals.wrong).toLocaleString()} answers
+            {totals.correct.toLocaleString()} of {count(totals.correct + totals.wrong, 'answer')}
           </div>
         </div>
         <div className="tile">
@@ -110,14 +111,17 @@ export function Stats() {
         <div className="tile">
           <div className="label">Due now</div>
           <div className="value">{dueCount.toLocaleString()}</div>
-          <div className="sub">reviews</div>
+          <div className="sub">{noun(dueCount, 'review')}</div>
         </div>
       </section>
 
       <section className="card stack" style={{ gap: 10 }}>
         <div>
           <h2>Points per day</h2>
-          <div className="small muted">Last 30 days · goal line at {settings.dailyGoal}</div>
+          <div className="small muted">
+            Last 30 days · goal line at {settings.dailyGoal}
+            {last30[last30.length - 1].value > 0 && ` · today ${count(last30[last30.length - 1].value, 'point')}`}
+          </div>
         </div>
         <ColumnChart data={last30} goal={settings.dailyGoal} unit="points" />
       </section>
@@ -135,7 +139,7 @@ export function Stats() {
           <h2>Upcoming reviews</h2>
           <div className="small muted">Sentences due in the next 7 days</div>
         </div>
-        <ColumnChart data={forecast} unit="reviews" height={150} labelLast={false} />
+        <ColumnChart data={forecast} unit="reviews" height={150} />
       </section>
 
       <section className="card stack" style={{ gap: 6 }}>

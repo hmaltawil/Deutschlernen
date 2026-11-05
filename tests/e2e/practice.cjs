@@ -64,7 +64,7 @@ const ok = (c, m) => (console.log(`${c ? 'PASS' : 'FAIL'}  ${m}`), c || failed++
   ok(await page.$eval('.star-btn', (e) => e.getAttribute('aria-pressed') === 'true'), 'F stars the sentence');
   await page.click('button[aria-label="Quit round"]');
   await page.waitForSelector('[data-testid=your-lists]');
-  ok((await page.textContent('[data-list=fav]')).includes('1 sentence'), 'Home: Favourites has 1 sentence');
+  ok(/(^|\D)1\ssentence\b/.test(await page.textContent('[data-list=fav]')), 'Home: Favourites has 1 sentence');
   await page.goto(U + '#/list/fav');
   await page.waitForSelector('.sent-row');
   ok(Number(await page.$eval('.sent-row', (e) => e.dataset.id)) === first, 'the favourites page lists it');
@@ -101,7 +101,7 @@ const ok = (c, m) => (console.log(`${c ? 'PASS' : 'FAIL'}  ${m}`), c || failed++
   }
   await page.goto(U + '#/');
   await page.waitForSelector('[data-testid=your-lists]');
-  ok((await page.textContent('[data-list=missed]')).includes('1 sentence'), 'Home: Often missed has the sentence answered wrong twice');
+  ok(/(^|\D)1\ssentence\b/.test(await page.textContent('[data-list=missed]')), 'Home: Often missed has the sentence answered wrong twice');
   await page.goto(U + '#/play?kind=missed');
   ok((await (async () => (await page.waitForSelector('.cloze-card'), cardId()))()) === missed, 'an Often missed round plays it');
 

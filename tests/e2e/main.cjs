@@ -80,7 +80,7 @@ async function answerRound(page, map, { mode, wrongIdx = [] }) {
   ok(retries === 3, `wrong answers are re-asked once at the end (${retries} retries)`);
   ok(log1.filter((l) => !l.retry && !l.wrong).every((l) => l.verdict.startsWith('Richtig')), 'correct choices are marked Richtig');
   const summary = await page.textContent('.hero');
-  const m = summary.match(/\+(\d+) points · (\d+)\/(\d+) correct/);
+  const m = summary.match(/\+(\d+)\spoints · (\d+)\/(\d+)\scorrect/);
   ok(m && m[2] === '7' && m[3] === '10', `summary: ${m && m[0]}`);
   const roundPts = m ? Number(m[1]) : 0;
   // 7 correct with combo: 4,4.4,(reset)... just check plausible range
@@ -196,7 +196,7 @@ async function answerRound(page, map, { mode, wrongIdx = [] }) {
   ok((await page.textContent('.tile .value')).trim() === '0', 'reset clears progress');
   await page.goto(URL0 + '#/settings');
   await page.setInputFiles('input[data-testid="import-file"]', file);
-  await page.waitForSelector('text=/Backup restored: [0-9,]+ sentences/');
+  await page.waitForSelector('text=/Backup restored: [0-9,]+\\ssentences/');
   await page.goto(URL0 + '#/');
   await page.waitForSelector('.hero');
   ok(Number((await page.textContent('.tile .value')).trim()) === backup.progress.length, 'import restores progress');
